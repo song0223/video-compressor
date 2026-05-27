@@ -1,3 +1,7 @@
+pub mod ffmpeg;
+pub mod models;
+pub mod presets;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
