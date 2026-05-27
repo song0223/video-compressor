@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::io::BufRead;
@@ -11,32 +12,37 @@ use crate::models::{
     ExportPreset, ExportProgressEvent, ExportRequest, QualityPreset, ResolutionPreset,
 };
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct JobState {
+    inner: Arc<JobStateInner>,
+}
+
+#[derive(Default)]
+struct JobStateInner {
     current_pid: Mutex<Option<u32>>,
     canceled: AtomicBool,
 }
 
 impl JobState {
     pub fn set_current_pid(&self, pid: u32) {
-        *self.current_pid.lock().expect("job pid mutex poisoned") = Some(pid);
-        self.canceled.store(false, Ordering::SeqCst);
+        *self.inner.current_pid.lock().expect("job pid mutex poisoned") = Some(pid);
+        self.inner.canceled.store(false, Ordering::SeqCst);
     }
 
     pub fn clear_current_pid(&self) {
-        *self.current_pid.lock().expect("job pid mutex poisoned") = None;
+        *self.inner.current_pid.lock().expect("job pid mutex poisoned") = None;
     }
 
     pub fn current_pid(&self) -> Option<u32> {
-        *self.current_pid.lock().expect("job pid mutex poisoned")
+        *self.inner.current_pid.lock().expect("job pid mutex poisoned")
     }
 
     pub fn mark_canceled(&self) {
-        self.canceled.store(true, Ordering::SeqCst);
+        self.inner.canceled.store(true, Ordering::SeqCst);
     }
 
     pub fn is_canceled(&self) -> bool {
-        self.canceled.load(Ordering::SeqCst)
+        self.inner.canceled.load(Ordering::SeqCst)
     }
 }
 
@@ -91,10 +97,9 @@ fn ffmpeg_progress_args(input_path: &Path, output_path: &Path, preset: &ExportPr
     args
 }
 
-#[tauri::command]
-pub fn export_video(
+fn export_video_blocking(
     app: AppHandle,
-    state: State<'_, JobState>,
+    state: JobState,
     request: ExportRequest,
 ) -> Result<String, String> {
     let input_path = PathBuf::from(&request.source_path);
@@ -143,6 +148,18 @@ pub fn export_video(
     }
 
     Ok(output_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn export_video(
+    app: AppHandle,
+    state: State<'_, JobState>,
+    request: ExportRequest,
+) -> Result<String, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || export_video_blocking(app, state, request))
+        .await
+        .map_err(|error| format!("导出任务异常结束: {error}"))?
 }
 
 #[tauri::command]

@@ -10,6 +10,7 @@ use crate::models::{ExportPreset, ProgressSnapshot, QualityPreset, ResolutionPre
 pub struct QualitySettings {
     pub crf: u8,
     pub encoder_preset: &'static str,
+    pub max_threads: u8,
 }
 
 pub fn scale_filter(resolution: &ResolutionPreset) -> Option<String> {
@@ -30,14 +31,17 @@ pub fn quality_settings(quality: &QualityPreset) -> QualitySettings {
         QualityPreset::Small => QualitySettings {
             crf: 26,
             encoder_preset: "veryfast",
+            max_threads: 4,
         },
         QualityPreset::Balanced => QualitySettings {
             crf: 22,
             encoder_preset: "veryfast",
+            max_threads: 4,
         },
         QualityPreset::High => QualitySettings {
             crf: 18,
-            encoder_preset: "faster",
+            encoder_preset: "veryfast",
+            max_threads: 4,
         },
     }
 }
@@ -63,6 +67,8 @@ pub fn build_ffmpeg_args(input_path: &Path, output_path: &Path, preset: &ExportP
         quality.encoder_preset.to_string(),
         "-crf".to_string(),
         quality.crf.to_string(),
+        "-threads".to_string(),
+        quality.max_threads.to_string(),
         "-c:a".to_string(),
         "copy".to_string(),
         "-movflags".to_string(),
@@ -253,6 +259,21 @@ mod tests {
         assert!(args.contains(&"/tmp/source video.mov".to_string()));
         assert!(args.contains(&"/tmp/output video.mp4".to_string()));
         assert!(args.contains(&"scale=-2:720".to_string()));
+    }
+
+    #[test]
+    fn command_builder_limits_encoder_threads() {
+        let args = build_ffmpeg_args(
+            Path::new("/tmp/source.mov"),
+            Path::new("/tmp/output.mp4"),
+            &ExportPreset {
+                resolution: ResolutionPreset::P720,
+                quality: QualityPreset::Balanced,
+            },
+        );
+
+        let threads_index = args.iter().position(|arg| arg == "-threads").unwrap();
+        assert_eq!(args.get(threads_index + 1), Some(&"4".to_string()));
     }
 
     #[test]

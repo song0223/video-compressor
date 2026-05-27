@@ -3,6 +3,7 @@ node_modules/
 dist/
 target/
 src-tauri/target/
+docs/
 src-tauri/binaries/macos/ffmpeg
 src-tauri/binaries/macos/ffprobe
 src-tauri/binaries/windows/ffmpeg.exe
