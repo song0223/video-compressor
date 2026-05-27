@@ -1,6 +1,10 @@
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
-use crate::models::{ExportPreset, QualityPreset, ResolutionPreset};
+use serde::Deserialize;
+
+use crate::models::{ExportPreset, ProgressSnapshot, QualityPreset, ResolutionPreset, VideoMetadata};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct QualitySettings {
@@ -69,6 +73,109 @@ pub fn build_ffmpeg_args(input_path: &Path, output_path: &Path, preset: &ExportP
     args
 }
 
+fn command_from_path_or_name(name: &str) -> PathBuf {
+    PathBuf::from(name)
+}
+
+pub fn ffprobe_path() -> PathBuf {
+    command_from_path_or_name(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" })
+}
+
+pub fn parse_progress_update(progress_text: &str, duration_seconds: f64) -> ProgressSnapshot {
+    let mut out_time_ms = None;
+    let mut output_size_bytes = None;
+
+    for line in progress_text.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+
+        match key {
+            "out_time_ms" => out_time_ms = value.parse::<f64>().ok(),
+            "total_size" => output_size_bytes = value.parse::<u64>().ok(),
+            _ => {}
+        }
+    }
+
+    let percent = out_time_ms
+        .filter(|_| duration_seconds > 0.0)
+        .map(|value| (value / 1_000_000.0 / duration_seconds).clamp(0.0, 1.0))
+        .unwrap_or(0.0);
+
+    ProgressSnapshot {
+        percent,
+        output_size_bytes,
+    }
+}
+
+#[derive(Deserialize)]
+struct FfprobeOutput {
+    streams: Vec<FfprobeStream>,
+    format: Option<FfprobeFormat>,
+}
+
+#[derive(Deserialize)]
+struct FfprobeStream {
+    codec_name: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
+    duration: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct FfprobeFormat {
+    duration: Option<String>,
+}
+
+pub fn read_video_metadata(path: &Path) -> Result<VideoMetadata, String> {
+    let output = Command::new(ffprobe_path())
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name,width,height,duration:format=duration",
+            "-of",
+            "json",
+        ])
+        .arg(path)
+        .output()
+        .map_err(|error| format!("无法运行 ffprobe: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("ffprobe 读取失败: {stderr}"));
+    }
+
+    let parsed: FfprobeOutput = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("ffprobe 输出解析失败: {error}"))?;
+    let stream = parsed
+        .streams
+        .first()
+        .ok_or_else(|| "没有找到视频流".to_string())?;
+    let metadata = fs::metadata(path).map_err(|error| format!("无法读取文件大小: {error}"))?;
+    let duration_seconds = stream
+        .duration
+        .as_ref()
+        .or(parsed.format.as_ref().and_then(|format| format.duration.as_ref()))
+        .and_then(|duration| duration.parse::<f64>().ok())
+        .unwrap_or(0.0);
+
+    Ok(VideoMetadata {
+        width: stream.width.unwrap_or(0),
+        height: stream.height.unwrap_or(0),
+        duration_seconds,
+        codec: stream.codec_name.clone().unwrap_or_else(|| "unknown".to_string()),
+        size_bytes: metadata.len(),
+    })
+}
+
+#[tauri::command]
+pub fn get_video_metadata(path: String) -> Result<VideoMetadata, String> {
+    read_video_metadata(Path::new(&path))
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -115,5 +222,31 @@ mod tests {
         assert!(args.contains(&"/tmp/source video.mov".to_string()));
         assert!(args.contains(&"/tmp/output video.mp4".to_string()));
         assert!(args.contains(&"scale=-2:720".to_string()));
+    }
+
+    #[test]
+    fn progress_parser_reads_out_time_ms_against_duration() {
+        let snapshot = crate::ffmpeg::parse_progress_update(
+            "out_time_ms=5000000\ntotal_size=1048576\nprogress=continue",
+            10.0,
+        );
+
+        assert_eq!(snapshot.percent, 0.5);
+        assert_eq!(snapshot.output_size_bytes, Some(1_048_576));
+    }
+
+    #[test]
+    fn progress_parser_clamps_percent_to_one() {
+        let snapshot = crate::ffmpeg::parse_progress_update("out_time_ms=15000000", 10.0);
+
+        assert_eq!(snapshot.percent, 1.0);
+    }
+
+    #[test]
+    fn progress_parser_ignores_malformed_lines() {
+        let snapshot = crate::ffmpeg::parse_progress_update("not-progress\nout_time_ms=nope", 10.0);
+
+        assert_eq!(snapshot.percent, 0.0);
+        assert_eq!(snapshot.output_size_bytes, None);
     }
 }
