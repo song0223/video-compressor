@@ -74,7 +74,34 @@ pub fn build_ffmpeg_args(input_path: &Path, output_path: &Path, preset: &ExportP
 }
 
 fn command_from_path_or_name(name: &str) -> PathBuf {
+    if let Some(path) = bundled_binary_path(name) {
+        return path;
+    }
+
     PathBuf::from(name)
+}
+
+fn bundled_binary_path(name: &str) -> Option<PathBuf> {
+    let platform = if cfg!(windows) { "windows" } else { "macos" };
+    let file_name = if cfg!(windows) && !name.ends_with(".exe") {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    };
+
+    let mut candidates = Vec::new();
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        candidates.push(PathBuf::from(manifest_dir).join("binaries").join(platform).join(&file_name));
+    }
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            candidates.push(exe_dir.join("../Resources/binaries").join(platform).join(&file_name));
+            candidates.push(exe_dir.join("resources/binaries").join(platform).join(&file_name));
+            candidates.push(exe_dir.join("binaries").join(platform).join(&file_name));
+        }
+    }
+
+    candidates.into_iter().find(|path| path.exists())
 }
 
 pub fn ffprobe_path() -> PathBuf {
