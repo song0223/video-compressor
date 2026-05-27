@@ -224,8 +224,10 @@ pub fn read_video_metadata(path: &Path) -> Result<VideoMetadata, String> {
 }
 
 #[tauri::command]
-pub fn get_video_metadata(path: String) -> Result<VideoMetadata, String> {
-    read_video_metadata(Path::new(&path))
+pub async fn get_video_metadata(path: String) -> Result<VideoMetadata, String> {
+    tauri::async_runtime::spawn_blocking(move || read_video_metadata(Path::new(&path)))
+        .await
+        .map_err(|error| format!("读取视频信息任务异常结束: {error}"))?
 }
 
 #[cfg(test)]

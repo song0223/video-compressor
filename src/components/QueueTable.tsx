@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, ExternalLink, FolderOpen, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, ExternalLink, FolderOpen, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { formatBytes, formatDuration, formatPercent } from "../lib/format";
 import { qualityPresets, resolutionPresets } from "../lib/presets";
 import type { QueueItem, QueueStatus } from "../types/video";
@@ -7,6 +7,7 @@ interface QueueTableProps {
   items: QueueItem[];
   onOpenOutput: (path?: string) => void;
   onOpenOutputFolder: (path?: string) => void;
+  onRemoveItem: (id: string) => void;
 }
 
 const statusLabels: Record<QueueStatus, string> = {
@@ -25,7 +26,12 @@ function StatusIcon({ status }: { status: QueueStatus }) {
   return <Clock3 size={17} className="text-slate-400" />;
 }
 
-export function QueueTable({ items, onOpenOutput, onOpenOutputFolder }: QueueTableProps) {
+export function QueueTable({
+  items,
+  onOpenOutput,
+  onOpenOutputFolder,
+  onRemoveItem,
+}: QueueTableProps) {
   if (items.length === 0) {
     return (
       <section className="tool-card flex min-h-[260px] items-center justify-center p-8 text-center">
@@ -41,7 +47,7 @@ export function QueueTable({ items, onOpenOutput, onOpenOutputFolder }: QueueTab
 
   return (
     <section className="tool-card overflow-hidden">
-      <div className="grid grid-cols-[minmax(260px,1fr)_145px_150px_145px_116px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
+      <div className="grid grid-cols-[minmax(260px,1fr)_145px_150px_145px_154px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
         <span>文件</span>
         <span>预设</span>
         <span>状态</span>
@@ -55,7 +61,7 @@ export function QueueTable({ items, onOpenOutput, onOpenOutputFolder }: QueueTab
           const quality = qualityPresets.find((preset) => preset.id === item.preset.quality);
           return (
             <article
-              className="grid grid-cols-[minmax(260px,1fr)_145px_150px_145px_116px] items-center gap-0 px-4 py-4"
+              className="grid grid-cols-[minmax(260px,1fr)_145px_150px_145px_154px] items-center gap-0 px-4 py-4"
               key={item.id}
             >
               <div className="min-w-0 pr-4">
@@ -122,6 +128,15 @@ export function QueueTable({ items, onOpenOutput, onOpenOutputFolder }: QueueTab
                   onClick={() => onOpenOutputFolder(item.outputPath)}
                 >
                   <FolderOpen size={16} />
+                </button>
+                <button
+                  className="icon-button danger-button h-9 w-9 p-0"
+                  type="button"
+                  title="从列表删除"
+                  disabled={item.status === "running"}
+                  onClick={() => onRemoveItem(item.id)}
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
             </article>

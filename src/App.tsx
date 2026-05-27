@@ -147,6 +147,10 @@ function App() {
     setNotice("");
   };
 
+  const removeItem = (id: string) => {
+    setItems((current) => current.filter((item) => item.id !== id));
+  };
+
   const startAll = async () => {
     if (items.length === 0) {
       setNotice("请先添加视频。");
@@ -257,6 +261,7 @@ function App() {
               items={items}
               onOpenOutput={openOutputPath}
               onOpenOutputFolder={openOutputFolder}
+              onRemoveItem={removeItem}
             />
           </div>
 
