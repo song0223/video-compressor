@@ -6,6 +6,8 @@ interface ToolbarProps {
   onAddVideos: () => void;
   onChooseOutput: () => void;
   onClearQueue: () => void;
+  onStartAll: () => void;
+  onCancelCurrent: () => void;
 }
 
 export function Toolbar({
@@ -14,6 +16,8 @@ export function Toolbar({
   onAddVideos,
   onChooseOutput,
   onClearQueue,
+  onStartAll,
+  onCancelCurrent,
 }: ToolbarProps) {
   return (
     <header className="tool-card flex items-center justify-between px-5 py-4">
@@ -40,14 +44,14 @@ export function Toolbar({
           清空
         </button>
         <div className="mx-1 h-7 w-px bg-slate-200" />
-        <button className="icon-button primary-button" type="button" title="开始全部导出">
+        <button className="icon-button primary-button" type="button" title="开始全部导出" onClick={onStartAll}>
           <Play size={17} />
           全部导出
         </button>
-        <button className="icon-button" type="button" title="暂停当前任务">
+        <button className="icon-button" type="button" title="暂停当前任务" disabled>
           <Pause size={17} />
         </button>
-        <button className="icon-button danger-button" type="button" title="取消当前任务">
+        <button className="icon-button danger-button" type="button" title="取消当前任务" onClick={onCancelCurrent}>
           <Square size={16} />
         </button>
       </div>

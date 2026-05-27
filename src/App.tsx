@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useCallback, useMemo, useState } from "react";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FooterProgress } from "./components/FooterProgress";
 import { DropZone } from "./components/DropZone";
 import { PresetPanel } from "./components/PresetPanel";
@@ -20,11 +22,50 @@ function isSupportedVideo(path: string): boolean {
   return extension ? videoExtensions.includes(extension) : false;
 }
 
+function directoryFromPath(path: string): string {
+  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return index > 0 ? path.slice(0, index) : path;
+}
+
+interface ExportProgressPayload {
+  id: string;
+  percent: number;
+  outputSizeBytes?: number;
+}
+
 function App() {
   const [selectedPreset, setSelectedPreset] = useState<VideoPreset>(getDefaultPreset());
   const [items, setItems] = useState<QueueItem[]>([]);
   const [outputDirectory, setOutputDirectory] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<ExportProgressPayload>("export-progress", (event) => {
+      setItems((current) =>
+        current.map((item) =>
+          item.id === event.payload.id
+            ? {
+                ...item,
+                progress: {
+                  ...item.progress,
+                  percent: event.payload.percent,
+                  outputSizeBytes: event.payload.outputSizeBytes ?? item.progress.outputSizeBytes,
+                },
+              }
+            : item,
+        ),
+      );
+    })
+      .then((dispose) => {
+        unlisten = dispose;
+      })
+      .catch(() => undefined);
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   const totalProgress = useMemo(() => {
     if (items.length === 0) return 0;
@@ -108,6 +149,93 @@ function App() {
     setNotice("");
   };
 
+  const startAll = async () => {
+    if (items.length === 0) {
+      setNotice("请先添加视频。");
+      return;
+    }
+    if (!outputDirectory) {
+      setNotice("请先选择输出位置。");
+      return;
+    }
+
+    setNotice("");
+    const queue = items.filter((item) => item.status === "waiting" || item.status === "failed");
+    for (const item of queue) {
+      setItems((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, status: "running", errorMessage: undefined, progress: { percent: 0 } }
+            : entry,
+        ),
+      );
+
+      try {
+        const outputPath = await invoke<string>("export_video", {
+          request: {
+            id: item.id,
+            sourcePath: item.sourcePath,
+            outputDirectory,
+            preset: item.preset,
+            durationSeconds: item.metadata?.durationSeconds ?? 0,
+          },
+        });
+        setItems((current) =>
+          current.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  status: "completed",
+                  outputPath,
+                  progress: { ...entry.progress, percent: 1 },
+                }
+              : entry,
+          ),
+        );
+      } catch (error) {
+        const message = String(error);
+        setItems((current) =>
+          current.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  status: message.includes("取消") ? "canceled" : "failed",
+                  errorMessage: message,
+                }
+              : entry,
+          ),
+        );
+        break;
+      }
+    }
+  };
+
+  const cancelCurrent = async () => {
+    try {
+      await invoke("cancel_current_export");
+    } catch (error) {
+      setNotice(`取消失败：${String(error)}`);
+    }
+  };
+
+  const openOutputPath = async (path?: string) => {
+    if (!path) return;
+    try {
+      await openPath(path);
+    } catch (error) {
+      setNotice(`无法打开文件：${String(error)}`);
+    }
+  };
+
+  const openOutputFolder = async (path?: string) => {
+    if (!path) return;
+    try {
+      await openPath(directoryFromPath(path));
+    } catch (error) {
+      setNotice(`无法打开文件夹：${String(error)}`);
+    }
+  };
+
   return (
     <main className="min-h-screen px-8 py-7">
       <div className="mx-auto flex max-w-[1320px] flex-col gap-5">
@@ -117,6 +245,8 @@ function App() {
           onAddVideos={selectVideos}
           onChooseOutput={selectOutputDirectory}
           onClearQueue={clearQueue}
+          onStartAll={startAll}
+          onCancelCurrent={cancelCurrent}
         />
 
         {notice ? (
@@ -128,7 +258,11 @@ function App() {
         <section className="grid grid-cols-[minmax(0,1fr)_300px] gap-5">
           <div className="flex min-w-0 flex-col gap-4">
             <DropZone onAddVideos={selectVideos} onAddPaths={addVideoPaths} />
-            <QueueTable items={items} />
+            <QueueTable
+              items={items}
+              onOpenOutput={openOutputPath}
+              onOpenOutputFolder={openOutputFolder}
+            />
           </div>
 
           <PresetPanel

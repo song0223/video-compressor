@@ -5,6 +5,8 @@ import type { QueueItem, QueueStatus } from "../types/video";
 
 interface QueueTableProps {
   items: QueueItem[];
+  onOpenOutput: (path?: string) => void;
+  onOpenOutputFolder: (path?: string) => void;
 }
 
 const statusLabels: Record<QueueStatus, string> = {
@@ -23,7 +25,7 @@ function StatusIcon({ status }: { status: QueueStatus }) {
   return <Clock3 size={17} className="text-slate-400" />;
 }
 
-export function QueueTable({ items }: QueueTableProps) {
+export function QueueTable({ items, onOpenOutput, onOpenOutputFolder }: QueueTableProps) {
   if (items.length === 0) {
     return (
       <section className="tool-card flex min-h-[260px] items-center justify-center p-8 text-center">
@@ -103,10 +105,22 @@ export function QueueTable({ items }: QueueTableProps) {
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="icon-button h-9 w-9 p-0" type="button" title="打开输出文件">
+                <button
+                  className="icon-button h-9 w-9 p-0"
+                  type="button"
+                  title="打开输出文件"
+                  disabled={!item.outputPath}
+                  onClick={() => onOpenOutput(item.outputPath)}
+                >
                   <ExternalLink size={16} />
                 </button>
-                <button className="icon-button h-9 w-9 p-0" type="button" title="打开文件位置">
+                <button
+                  className="icon-button h-9 w-9 p-0"
+                  type="button"
+                  title="打开文件位置"
+                  disabled={!item.outputPath}
+                  onClick={() => onOpenOutputFolder(item.outputPath)}
+                >
                   <FolderOpen size={16} />
                 </button>
               </div>

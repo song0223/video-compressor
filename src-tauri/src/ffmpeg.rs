@@ -81,6 +81,10 @@ pub fn ffprobe_path() -> PathBuf {
     command_from_path_or_name(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" })
 }
 
+pub fn ffmpeg_path() -> PathBuf {
+    command_from_path_or_name(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" })
+}
+
 pub fn parse_progress_update(progress_text: &str, duration_seconds: f64) -> ProgressSnapshot {
     let mut out_time_ms = None;
     let mut output_size_bytes = None;
