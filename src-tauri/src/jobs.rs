@@ -118,19 +118,26 @@ fn export_video_blocking(
     state.set_current_pid(child.id());
     let stdout = child.stdout.take().ok_or_else(|| "无法读取 ffmpeg 进度".to_string())?;
     let reader = std::io::BufReader::new(stdout);
+    let mut progress_block = String::new();
 
     for line in reader.lines() {
         let line = line.map_err(|error| format!("读取 ffmpeg 进度失败: {error}"))?;
-        let snapshot = parse_progress_update(&line, request.duration_seconds);
-        if snapshot.percent > 0.0 || snapshot.output_size_bytes.is_some() {
+        progress_block.push_str(&line);
+        progress_block.push('\n');
+
+        if line.starts_with("progress=") {
+            let snapshot = parse_progress_update(&progress_block, request.duration_seconds);
             let _ = app.emit(
                 "export-progress",
                 ExportProgressEvent {
                     id: request.id.clone(),
                     percent: snapshot.percent,
                     output_size_bytes: snapshot.output_size_bytes,
+                    speed_text: snapshot.speed_text,
+                    eta_seconds: snapshot.eta_seconds,
                 },
             );
+            progress_block.clear();
         }
     }
 

@@ -8,29 +8,23 @@ import { DropZone } from "./components/DropZone";
 import { PresetPanel } from "./components/PresetPanel";
 import { QueueTable } from "./components/QueueTable";
 import { Toolbar } from "./components/Toolbar";
+import { directoryFromPath, fileNameFromPath } from "./lib/filePaths";
 import { getDefaultPreset } from "./lib/presets";
 import type { QueueItem, VideoMetadata, VideoPreset } from "./types/video";
 
 const videoExtensions = ["mp4", "mov", "mkv", "avi", "webm", "m4v"];
-
-function fileNameFromPath(path: string): string {
-  return path.split(/[\\/]/).pop() || path;
-}
 
 function isSupportedVideo(path: string): boolean {
   const extension = path.split(".").pop()?.toLowerCase();
   return extension ? videoExtensions.includes(extension) : false;
 }
 
-function directoryFromPath(path: string): string {
-  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-  return index > 0 ? path.slice(0, index) : path;
-}
-
 interface ExportProgressPayload {
   id: string;
   percent: number;
   outputSizeBytes?: number;
+  speedText?: string;
+  etaSeconds?: number;
 }
 
 function App() {
@@ -51,6 +45,8 @@ function App() {
                   ...item.progress,
                   percent: event.payload.percent,
                   outputSizeBytes: event.payload.outputSizeBytes ?? item.progress.outputSizeBytes,
+                  speedText: event.payload.speedText ?? item.progress.speedText,
+                  etaSeconds: event.payload.etaSeconds ?? item.progress.etaSeconds,
                 },
               }
             : item,
@@ -82,6 +78,8 @@ function App() {
       setNotice("没有找到支持的视频文件。");
       return;
     }
+
+    setOutputDirectory((current) => current || directoryFromPath(uniquePaths[0]));
 
     for (const sourcePath of uniquePaths) {
       if (items.some((item) => item.sourcePath === sourcePath)) {
@@ -244,9 +242,6 @@ function App() {
           outputDirectory={outputDirectory}
           onAddVideos={selectVideos}
           onChooseOutput={selectOutputDirectory}
-          onClearQueue={clearQueue}
-          onStartAll={startAll}
-          onCancelCurrent={cancelCurrent}
         />
 
         {notice ? (
@@ -272,7 +267,13 @@ function App() {
           />
         </section>
 
-        <FooterProgress items={items} progress={totalProgress} />
+        <FooterProgress
+          items={items}
+          progress={totalProgress}
+          onClearQueue={clearQueue}
+          onStartAll={startAll}
+          onCancelCurrent={cancelCurrent}
+        />
       </div>
     </main>
   );

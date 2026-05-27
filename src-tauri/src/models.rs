@@ -47,6 +47,8 @@ pub struct VideoMetadata {
 pub struct ProgressSnapshot {
     pub percent: f64,
     pub output_size_bytes: Option<u64>,
+    pub speed_text: Option<String>,
+    pub eta_seconds: Option<f64>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -65,4 +67,6 @@ pub struct ExportProgressEvent {
     pub id: String,
     pub percent: f64,
     pub output_size_bytes: Option<u64>,
+    pub speed_text: Option<String>,
+    pub eta_seconds: Option<f64>,
 }

@@ -121,6 +121,8 @@ pub fn ffmpeg_path() -> PathBuf {
 pub fn parse_progress_update(progress_text: &str, duration_seconds: f64) -> ProgressSnapshot {
     let mut out_time_ms = None;
     let mut output_size_bytes = None;
+    let mut speed_text = None;
+    let mut speed_multiplier = None;
 
     for line in progress_text.lines() {
         let Some((key, value)) = line.split_once('=') else {
@@ -130,18 +132,31 @@ pub fn parse_progress_update(progress_text: &str, duration_seconds: f64) -> Prog
         match key {
             "out_time_ms" => out_time_ms = value.parse::<f64>().ok(),
             "total_size" => output_size_bytes = value.parse::<u64>().ok(),
+            "speed" => {
+                if value != "N/A" {
+                    speed_text = Some(value.to_string());
+                    speed_multiplier = value.trim_end_matches('x').parse::<f64>().ok();
+                }
+            }
             _ => {}
         }
     }
 
+    let encoded_seconds = out_time_ms.map(|value| value / 1_000_000.0);
     let percent = out_time_ms
         .filter(|_| duration_seconds > 0.0)
         .map(|value| (value / 1_000_000.0 / duration_seconds).clamp(0.0, 1.0))
         .unwrap_or(0.0);
+    let eta_seconds = encoded_seconds
+        .zip(speed_multiplier)
+        .filter(|(_, speed)| duration_seconds > 0.0 && *speed > 0.0)
+        .map(|(encoded, speed)| (duration_seconds - encoded).max(0.0) / speed);
 
     ProgressSnapshot {
         percent,
         output_size_bytes,
+        speed_text,
+        eta_seconds,
     }
 }
 
@@ -279,12 +294,14 @@ mod tests {
     #[test]
     fn progress_parser_reads_out_time_ms_against_duration() {
         let snapshot = crate::ffmpeg::parse_progress_update(
-            "out_time_ms=5000000\ntotal_size=1048576\nprogress=continue",
+            "out_time_ms=5000000\ntotal_size=1048576\nspeed=2x\nprogress=continue",
             10.0,
         );
 
         assert_eq!(snapshot.percent, 0.5);
         assert_eq!(snapshot.output_size_bytes, Some(1_048_576));
+        assert_eq!(snapshot.speed_text, Some("2x".to_string()));
+        assert_eq!(snapshot.eta_seconds, Some(2.5));
     }
 
     #[test]
@@ -300,5 +317,7 @@ mod tests {
 
         assert_eq!(snapshot.percent, 0.0);
         assert_eq!(snapshot.output_size_bytes, None);
+        assert_eq!(snapshot.speed_text, None);
+        assert_eq!(snapshot.eta_seconds, None);
     }
 }

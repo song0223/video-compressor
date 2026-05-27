@@ -1,13 +1,22 @@
-import { Activity } from "lucide-react";
+import { Activity, ListX, Pause, Play, Square } from "lucide-react";
 import { formatPercent } from "../lib/format";
 import type { QueueItem } from "../types/video";
 
 interface FooterProgressProps {
   items: QueueItem[];
   progress: number;
+  onClearQueue: () => void;
+  onStartAll: () => void;
+  onCancelCurrent: () => void;
 }
 
-export function FooterProgress({ items, progress }: FooterProgressProps) {
+export function FooterProgress({
+  items,
+  progress,
+  onClearQueue,
+  onStartAll,
+  onCancelCurrent,
+}: FooterProgressProps) {
   const completed = items.filter((item) => item.status === "completed").length;
   const running = items.find((item) => item.status === "running");
 
@@ -27,6 +36,24 @@ export function FooterProgress({ items, progress }: FooterProgressProps) {
 
       <div className="progress-track h-3 flex-1">
         <div className="progress-fill" style={{ width: formatPercent(progress) }} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button className="icon-button" type="button" title="清空队列" onClick={onClearQueue}>
+          <ListX size={17} />
+          清空
+        </button>
+        <button className="icon-button primary-button" type="button" title="开始全部导出" onClick={onStartAll}>
+          <Play size={17} />
+          全部导出
+        </button>
+        <button className="icon-button" type="button" title="暂停当前任务" disabled>
+          <Pause size={17} />
+          暂停
+        </button>
+        <button className="icon-button danger-button" type="button" title="取消当前任务" onClick={onCancelCurrent}>
+          <Square size={16} />
+        </button>
       </div>
     </footer>
   );
