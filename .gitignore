@@ -4,6 +4,6 @@ dist/
 target/
 src-tauri/target/
 .superpowers/
+.worktrees/
 *.log
 *.tmp
-
