@@ -24,6 +24,19 @@ function StatusIcon({ status }: { status: QueueStatus }) {
 }
 
 export function QueueTable({ items }: QueueTableProps) {
+  if (items.length === 0) {
+    return (
+      <section className="tool-card flex min-h-[260px] items-center justify-center p-8 text-center">
+        <div>
+          <h2 className="m-0 text-xl font-bold text-slate-950">队列还是空的</h2>
+          <p className="m-0 mt-2 text-sm text-slate-500">
+            点击“添加视频”手动多选，或直接拖入多个视频文件。
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="tool-card overflow-hidden">
       <div className="grid grid-cols-[minmax(260px,1fr)_145px_150px_145px_116px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
@@ -75,7 +88,9 @@ export function QueueTable({ items }: QueueTableProps) {
                   {statusLabels[item.status]}
                 </span>
                 <span className="text-slate-500">
-                  {item.status === "running"
+                  {item.status === "failed"
+                    ? item.errorMessage || "读取失败"
+                    : item.status === "running"
                     ? `${item.progress.speedText ?? "-"} · 剩余 ${formatDuration(item.progress.etaSeconds)}`
                     : item.status === "completed"
                       ? "可以打开文件位置"

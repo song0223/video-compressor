@@ -1,8 +1,46 @@
 import { FileVideo, MousePointerClick } from "lucide-react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { useEffect, useState } from "react";
 
-export function DropZone() {
+interface DropZoneProps {
+  onAddVideos: () => void;
+  onAddPaths: (paths: string[]) => void;
+}
+
+export function DropZone({ onAddVideos, onAddPaths }: DropZoneProps) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type === "enter" || event.payload.type === "over") {
+          setIsDragging(true);
+        } else if (event.payload.type === "drop") {
+          setIsDragging(false);
+          onAddPaths(event.payload.paths);
+        } else {
+          setIsDragging(false);
+        }
+      })
+      .then((dispose) => {
+        unlisten = dispose;
+      })
+      .catch(() => {
+        setIsDragging(false);
+      });
+
+    return () => {
+      unlisten?.();
+    };
+  }, [onAddPaths]);
+
   return (
-    <section className="tool-card flex min-h-[128px] items-center justify-between gap-5 border-dashed px-5 py-4">
+    <section
+      className={`tool-card flex min-h-[128px] items-center justify-between gap-5 border-dashed px-5 py-4 ${
+        isDragging ? "border-blue-500 bg-blue-50" : ""
+      }`}
+    >
       <div className="flex items-center gap-4">
         <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
           <FileVideo size={28} />
@@ -15,7 +53,7 @@ export function DropZone() {
         </div>
       </div>
 
-      <button className="icon-button" type="button" title="手动选择多个视频">
+      <button className="icon-button" type="button" title="手动选择多个视频" onClick={onAddVideos}>
         <MousePointerClick size={17} />
         手动多选
       </button>
