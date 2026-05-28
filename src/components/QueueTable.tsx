@@ -1,5 +1,10 @@
 import { CheckCircle2, Clock3, ExternalLink, FolderOpen, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { formatBytes, formatDuration, formatPercent } from "../lib/format";
+import {
+  estimateExportDurationSeconds,
+  estimateOutputSizeBytes,
+  formatCompressionSummary,
+} from "../lib/outputStats";
 import { qualityPresets, resolutionPresets } from "../lib/presets";
 import type { QueueItem, QueueStatus } from "../types/video";
 
@@ -60,6 +65,23 @@ export function QueueTable({
         {items.map((item) => {
           const resolution = resolutionPresets.find((preset) => preset.id === item.preset.resolution);
           const quality = qualityPresets.find((preset) => preset.id === item.preset.quality);
+          const estimatedOutputSize = item.metadata
+            ? estimateOutputSizeBytes(item.metadata, item.preset)
+            : undefined;
+          const estimatedExportDuration = item.metadata
+            ? estimateExportDurationSeconds(item.metadata, item.preset)
+            : undefined;
+          const finalOutputSize = item.progress.outputSizeBytes;
+          const outputSizeLabel =
+            finalOutputSize !== undefined
+              ? `输出 ${formatBytes(finalOutputSize)}`
+              : estimatedOutputSize !== undefined
+                ? `预计 ${formatBytes(estimatedOutputSize)}`
+                : "输出 -";
+          const completedSummary =
+            item.status === "completed" && item.metadata && finalOutputSize !== undefined
+              ? formatCompressionSummary(item.metadata.sizeBytes, finalOutputSize)
+              : undefined;
           return (
             <article
               className={`${queueRowGridClass} items-center gap-3 px-4 py-4`}
@@ -83,8 +105,13 @@ export function QueueTable({
                     {statusLabels[item.status]}
                   </span>
                   <span className="rounded-md bg-slate-100 px-2 py-1">
-                    输出 {formatBytes(item.progress.outputSizeBytes)}
+                    {outputSizeLabel}
                   </span>
+                  {estimatedExportDuration !== undefined && item.status !== "completed" ? (
+                    <span className="rounded-md bg-slate-100 px-2 py-1">
+                      预计用时 {formatDuration(estimatedExportDuration)}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-3 flex items-center gap-3">
                   <div className="progress-track flex-1">
@@ -103,7 +130,7 @@ export function QueueTable({
                     : item.status === "running"
                     ? `${item.progress.speedText ?? "-"} · 剩余 ${formatDuration(item.progress.etaSeconds)}`
                     : item.status === "completed"
-                      ? "可以打开文件位置"
+                      ? completedSummary ?? "可以打开文件位置"
                       : "准备就绪"}
                 </p>
               </div>

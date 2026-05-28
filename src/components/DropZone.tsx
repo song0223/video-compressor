@@ -12,23 +12,27 @@ export function DropZone({ onAddVideos, onAddPaths }: DropZoneProps) {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    getCurrentWebview()
-      .onDragDropEvent((event) => {
-        if (event.payload.type === "enter" || event.payload.type === "over") {
-          setIsDragging(true);
-        } else if (event.payload.type === "drop") {
+    try {
+      getCurrentWebview()
+        .onDragDropEvent((event) => {
+          if (event.payload.type === "enter" || event.payload.type === "over") {
+            setIsDragging(true);
+          } else if (event.payload.type === "drop") {
+            setIsDragging(false);
+            onAddPaths(event.payload.paths);
+          } else {
+            setIsDragging(false);
+          }
+        })
+        .then((dispose) => {
+          unlisten = dispose;
+        })
+        .catch(() => {
           setIsDragging(false);
-          onAddPaths(event.payload.paths);
-        } else {
-          setIsDragging(false);
-        }
-      })
-      .then((dispose) => {
-        unlisten = dispose;
-      })
-      .catch(() => {
-        setIsDragging(false);
-      });
+        });
+    } catch {
+      setIsDragging(false);
+    }
 
     return () => {
       unlisten?.();

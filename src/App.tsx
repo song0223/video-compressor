@@ -21,6 +21,7 @@ import {
 } from "./lib/completionNotifications";
 import { directoryFromPath, fileNameFromPath } from "./lib/filePaths";
 import { getDefaultPreset } from "./lib/presets";
+import { applyPresetToEditableItems } from "./lib/queueItems";
 import type { QueueItem, VideoMetadata, VideoPreset } from "./types/video";
 
 const videoExtensions = ["mp4", "mov", "mkv", "avi", "webm", "m4v"];
@@ -36,6 +37,11 @@ interface ExportProgressPayload {
   outputSizeBytes?: number;
   speedText?: string;
   etaSeconds?: number;
+}
+
+interface ExportResult {
+  outputPath: string;
+  outputSizeBytes: number;
 }
 
 function App() {
@@ -87,10 +93,15 @@ function App() {
   const totalProgress = useMemo(() => {
     if (items.length === 0) return 0;
     return items.reduce((sum, item) => sum + item.progress.percent, 0) / items.length;
-  }, [items]);
+  }, [items, selectedPreset]);
+
+  const updateSelectedPreset = (preset: VideoPreset) => {
+    setSelectedPreset(preset);
+    setItems((current) => applyPresetToEditableItems(current, preset));
+  };
 
   const applyPresetToAll = () => {
-    setItems((current) => current.map((item) => ({ ...item, preset: selectedPreset })));
+    setItems((current) => applyPresetToEditableItems(current, selectedPreset));
   };
 
   const addVideoPaths = useCallback(async (paths: string[]) => {
@@ -112,7 +123,7 @@ function App() {
         id,
         sourcePath,
         fileName: fileNameFromPath(sourcePath),
-        preset: getDefaultPreset(),
+        preset: selectedPreset,
         status: "waiting",
         progress: { percent: 0 },
       };
@@ -201,7 +212,7 @@ function App() {
       );
 
       try {
-        const outputPath = await invoke<string>("export_video", {
+        const result = await invoke<ExportResult>("export_video", {
           request: {
             id: item.id,
             sourcePath: item.sourcePath,
@@ -216,8 +227,12 @@ function App() {
               ? {
                   ...entry,
                   status: "completed",
-                  outputPath,
-                  progress: { ...entry.progress, percent: 1 },
+                  outputPath: result.outputPath,
+                  progress: {
+                    ...entry.progress,
+                    percent: 1,
+                    outputSizeBytes: result.outputSizeBytes,
+                  },
                 }
               : entry,
           ),
@@ -321,7 +336,7 @@ function App() {
 
           <PresetPanel
             selectedPreset={selectedPreset}
-            onPresetChange={setSelectedPreset}
+            onPresetChange={updateSelectedPreset}
             onApplyToAll={applyPresetToAll}
           />
         </section>

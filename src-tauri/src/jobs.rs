@@ -1,15 +1,16 @@
+use std::fs;
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::io::BufRead;
 
 use tauri::{AppHandle, Emitter, State};
 
 use crate::ffmpeg::{build_ffmpeg_args, ffmpeg_path, parse_progress_update};
 use crate::models::{
-    ExportPreset, ExportProgressEvent, ExportRequest, QualityPreset, ResolutionPreset,
+    ExportPreset, ExportProgressEvent, ExportRequest, ExportResult, QualityPreset, ResolutionPreset,
 };
 
 #[derive(Clone, Default)]
@@ -101,7 +102,7 @@ fn export_video_blocking(
     app: AppHandle,
     state: JobState,
     request: ExportRequest,
-) -> Result<String, String> {
+) -> Result<ExportResult, String> {
     let input_path = PathBuf::from(&request.source_path);
     let output_path = generate_output_path(
         &input_path,
@@ -154,7 +155,14 @@ fn export_video_blocking(
         return Err(format!("ffmpeg 导出失败，退出码: {status}"));
     }
 
-    Ok(output_path.to_string_lossy().to_string())
+    let output_size_bytes = fs::metadata(&output_path)
+        .map_err(|error| format!("无法读取输出文件大小: {error}"))?
+        .len();
+
+    Ok(ExportResult {
+        output_path: output_path.to_string_lossy().to_string(),
+        output_size_bytes,
+    })
 }
 
 #[tauri::command]
@@ -162,7 +170,7 @@ pub async fn export_video(
     app: AppHandle,
     state: State<'_, JobState>,
     request: ExportRequest,
-) -> Result<String, String> {
+) -> Result<ExportResult, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || export_video_blocking(app, state, request))
         .await

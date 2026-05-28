@@ -63,6 +63,13 @@ pub struct ExportRequest {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    pub output_path: String,
+    pub output_size_bytes: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExportProgressEvent {
     pub id: String,
     pub percent: f64,
