@@ -8,6 +8,11 @@ import { DropZone } from "./components/DropZone";
 import { PresetPanel } from "./components/PresetPanel";
 import { QueueTable } from "./components/QueueTable";
 import { Toolbar } from "./components/Toolbar";
+import {
+  appCompletionNotifier,
+  clearExportCompletionBadge,
+  notifyExportCompleted,
+} from "./lib/completionNotifications";
 import { directoryFromPath, fileNameFromPath } from "./lib/filePaths";
 import { getDefaultPreset } from "./lib/presets";
 import type { QueueItem, VideoMetadata, VideoPreset } from "./types/video";
@@ -32,6 +37,10 @@ function App() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [outputDirectory, setOutputDirectory] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    void clearExportCompletionBadge(appCompletionNotifier);
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -145,6 +154,7 @@ function App() {
   const clearQueue = () => {
     setItems([]);
     setNotice("");
+    void clearExportCompletionBadge(appCompletionNotifier);
   };
 
   const removeItem = (id: string) => {
@@ -162,6 +172,8 @@ function App() {
     }
 
     setNotice("");
+    let completedInRun = 0;
+    void clearExportCompletionBadge(appCompletionNotifier);
     const queue = items.filter((item) => item.status === "waiting" || item.status === "failed");
     for (const item of queue) {
       setItems((current) =>
@@ -194,6 +206,9 @@ function App() {
               : entry,
           ),
         );
+        completedInRun += 1;
+        setNotice(`已完成 ${completedInRun} 个导出：${item.fileName}`);
+        await notifyExportCompleted(completedInRun, appCompletionNotifier);
       } catch (error) {
         const message = String(error);
         setItems((current) =>

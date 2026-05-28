@@ -3,6 +3,8 @@ import { formatBytes, formatDuration, formatPercent } from "../lib/format";
 import { qualityPresets, resolutionPresets } from "../lib/presets";
 import type { QueueItem, QueueStatus } from "../types/video";
 
+export const queueRowGridClass = "grid grid-cols-[minmax(0,1fr)_124px]";
+
 interface QueueTableProps {
   items: QueueItem[];
   onOpenOutput: (path?: string) => void;
@@ -47,12 +49,11 @@ export function QueueTable({
 
   return (
     <section className="tool-card overflow-hidden">
-      <div className="grid grid-cols-[minmax(260px,1fr)_145px_150px_145px_154px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-        <span>文件</span>
-        <span>预设</span>
-        <span>状态</span>
-        <span>输出大小</span>
-        <span>操作</span>
+      <div
+        className={`${queueRowGridClass} border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.08em] text-slate-500`}
+      >
+        <span>文件与状态</span>
+        <span className="text-right">操作</span>
       </div>
 
       <div className="divide-y divide-slate-200">
@@ -61,7 +62,7 @@ export function QueueTable({
           const quality = qualityPresets.find((preset) => preset.id === item.preset.quality);
           return (
             <article
-              className="grid grid-cols-[minmax(260px,1fr)_145px_150px_145px_154px] items-center gap-0 px-4 py-4"
+              className={`${queueRowGridClass} items-center gap-3 px-4 py-4`}
               key={item.id}
             >
               <div className="min-w-0 pr-4">
@@ -73,6 +74,18 @@ export function QueueTable({
                       )} · ${formatBytes(item.metadata.sizeBytes)}`
                     : "等待读取信息"}
                 </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600">
+                  <span className="rounded-md bg-slate-100 px-2 py-1">
+                    {resolution?.label} · {quality?.label}
+                  </span>
+                  <span className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">
+                    <StatusIcon status={item.status} />
+                    {statusLabels[item.status]}
+                  </span>
+                  <span className="rounded-md bg-slate-100 px-2 py-1">
+                    输出 {formatBytes(item.progress.outputSizeBytes)}
+                  </span>
+                </div>
                 <div className="mt-3 flex items-center gap-3">
                   <div className="progress-track flex-1">
                     <div
@@ -84,18 +97,7 @@ export function QueueTable({
                     {formatPercent(item.progress.percent)}
                   </span>
                 </div>
-              </div>
-
-              <div className="text-sm font-semibold text-slate-700">
-                {resolution?.label} · {quality?.label}
-              </div>
-
-              <div className="flex flex-col gap-1 text-sm">
-                <span className="flex items-center gap-2 font-bold text-slate-800">
-                  <StatusIcon status={item.status} />
-                  {statusLabels[item.status]}
-                </span>
-                <span className="text-slate-500">
+                <p className="m-0 mt-2 text-sm text-slate-500">
                   {item.status === "failed"
                     ? item.errorMessage || "读取失败"
                     : item.status === "running"
@@ -103,14 +105,10 @@ export function QueueTable({
                     : item.status === "completed"
                       ? "可以打开文件位置"
                       : "准备就绪"}
-                </span>
+                </p>
               </div>
 
-              <div className="text-sm font-semibold text-slate-700">
-                {formatBytes(item.progress.outputSizeBytes)}
-              </div>
-
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center justify-end gap-2">
                 <button
                   className="icon-button h-9 w-9 p-0"
                   type="button"
