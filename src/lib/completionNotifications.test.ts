@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { clearExportCompletionBadge, notifyExportCompleted } from "./completionNotifications";
+import {
+  clearExportCompletionBadge,
+  completionToneSettings,
+  notifyExportCompleted,
+} from "./completionNotifications";
 
 describe("completion notifications", () => {
   it("plays a tone and updates the app badge with the completed count", async () => {
@@ -34,5 +38,10 @@ describe("completion notifications", () => {
     await clearExportCompletionBadge(notifier);
 
     expect(notifier.setBadgeCount).toHaveBeenCalledWith(undefined);
+  });
+
+  it("uses a more noticeable completion tone", () => {
+    expect(completionToneSettings.peakGain).toBeGreaterThanOrEqual(0.14);
+    expect(completionToneSettings.durationSeconds).toBeGreaterThanOrEqual(0.28);
   });
 });

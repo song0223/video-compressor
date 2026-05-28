@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FooterProgress } from "./components/FooterProgress";
 import { DropZone } from "./components/DropZone";
@@ -9,9 +10,14 @@ import { PresetPanel } from "./components/PresetPanel";
 import { QueueTable } from "./components/QueueTable";
 import { Toolbar } from "./components/Toolbar";
 import {
+  addCompletionMessage,
+  completionBadgeCount,
+  dismissCompletionMessage,
+  type CompletionMessage,
+} from "./lib/completionMessages";
+import {
   appCompletionNotifier,
-  clearExportCompletionBadge,
-  notifyExportCompleted,
+  setExportCompletionBadge,
 } from "./lib/completionNotifications";
 import { directoryFromPath, fileNameFromPath } from "./lib/filePaths";
 import { getDefaultPreset } from "./lib/presets";
@@ -37,10 +43,16 @@ function App() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [outputDirectory, setOutputDirectory] = useState("");
   const [notice, setNotice] = useState("");
+  const [completionMessages, setCompletionMessages] = useState<CompletionMessage[]>([]);
+
+  const completionNotificationCount = useMemo(
+    () => completionBadgeCount(completionMessages),
+    [completionMessages],
+  );
 
   useEffect(() => {
-    void clearExportCompletionBadge(appCompletionNotifier);
-  }, []);
+    void setExportCompletionBadge(completionNotificationCount, appCompletionNotifier);
+  }, [completionNotificationCount]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -154,11 +166,15 @@ function App() {
   const clearQueue = () => {
     setItems([]);
     setNotice("");
-    void clearExportCompletionBadge(appCompletionNotifier);
+    setCompletionMessages([]);
   };
 
   const removeItem = (id: string) => {
     setItems((current) => current.filter((item) => item.id !== id));
+  };
+
+  const dismissCompletion = (id: string) => {
+    setCompletionMessages((current) => dismissCompletionMessage(current, id));
   };
 
   const startAll = async () => {
@@ -172,8 +188,8 @@ function App() {
     }
 
     setNotice("");
+    setCompletionMessages([]);
     let completedInRun = 0;
-    void clearExportCompletionBadge(appCompletionNotifier);
     const queue = items.filter((item) => item.status === "waiting" || item.status === "failed");
     for (const item of queue) {
       setItems((current) =>
@@ -207,8 +223,10 @@ function App() {
           ),
         );
         completedInRun += 1;
-        setNotice(`已完成 ${completedInRun} 个导出：${item.fileName}`);
-        await notifyExportCompleted(completedInRun, appCompletionNotifier);
+        setCompletionMessages((current) =>
+          addCompletionMessage(current, `已完成 ${completedInRun} 个导出：${item.fileName}`),
+        );
+        appCompletionNotifier.playCompletionSound();
       } catch (error) {
         const message = String(error);
         setItems((current) =>
@@ -266,6 +284,27 @@ function App() {
         {notice ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
             {notice}
+          </div>
+        ) : null}
+
+        {completionMessages.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {completionMessages.map((message) => (
+              <div
+                className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900"
+                key={message.id}
+              >
+                <span className="min-w-0 truncate">{message.text}</span>
+                <button
+                  className="icon-button h-8 w-8 shrink-0 p-0"
+                  type="button"
+                  title="关闭完成消息"
+                  onClick={() => dismissCompletion(message.id)}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
           </div>
         ) : null}
 

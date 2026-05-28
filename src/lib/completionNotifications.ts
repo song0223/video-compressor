@@ -5,6 +5,11 @@ export interface CompletionNotifier {
   setBadgeCount: (count?: number) => Promise<void>;
 }
 
+export const completionToneSettings = {
+  durationSeconds: 0.34,
+  peakGain: 0.18,
+};
+
 type AudioWindow = Window &
   typeof globalThis & {
     webkitAudioContext?: typeof AudioContext;
@@ -25,13 +30,16 @@ export function playCompletionTone() {
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(880, context.currentTime);
     gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
+    gain.gain.exponentialRampToValueAtTime(completionToneSettings.peakGain, context.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      context.currentTime + completionToneSettings.durationSeconds,
+    );
 
     oscillator.connect(gain);
     gain.connect(context.destination);
     oscillator.start();
-    oscillator.stop(context.currentTime + 0.18);
+    oscillator.stop(context.currentTime + completionToneSettings.durationSeconds + 0.02);
     oscillator.addEventListener(
       "ended",
       () => {
@@ -69,4 +77,11 @@ export async function clearExportCompletionBadge(
   notifier: Pick<CompletionNotifier, "setBadgeCount">,
 ) {
   await notifier.setBadgeCount(undefined);
+}
+
+export async function setExportCompletionBadge(
+  count: number,
+  notifier: Pick<CompletionNotifier, "setBadgeCount">,
+) {
+  await notifier.setBadgeCount(count > 0 ? count : undefined);
 }
