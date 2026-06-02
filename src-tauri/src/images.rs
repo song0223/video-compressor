@@ -1,11 +1,38 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::ImageReader;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 use webp::Encoder as WebpEncoder;
+
+#[derive(Clone, Default)]
+pub struct ImageJobState {
+    inner: Arc<ImageJobStateInner>,
+}
+
+#[derive(Default)]
+struct ImageJobStateInner {
+    canceled: AtomicBool,
+}
+
+impl ImageJobState {
+    pub fn mark_canceled(&self) {
+        self.inner.canceled.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_canceled(&self) -> bool {
+        self.inner.canceled.load(Ordering::SeqCst)
+    }
+
+    pub fn reset(&self) {
+        self.inner.canceled.store(false, Ordering::SeqCst);
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub enum ImageExportFormat {
@@ -42,6 +69,8 @@ pub struct ImageExportRequest {
     pub source_path: String,
     pub output_directory: String,
     pub preset: ImagePreset,
+    #[serde(default)]
+    pub custom_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -169,18 +198,36 @@ pub fn generate_image_output_path(
     output_directory: &Path,
     preset: &ImagePreset,
     source_format: &str,
+    custom_name: Option<&str>,
 ) -> PathBuf {
-    let stem = input_path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("image");
     let output_format = effective_export_format(preset);
-    let base_name = format!(
-        "{}_{}_{}",
-        stem,
-        format_suffix(output_format),
-        quality_suffix(preset.quality_percent)
-    );
+    let base_name = if let Some(name) = custom_name {
+        if !name.is_empty() {
+            name.to_string()
+        } else {
+            let stem = input_path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("image");
+            format!(
+                "{}_{}_{}",
+                stem,
+                format_suffix(output_format),
+                quality_suffix(preset.quality_percent)
+            )
+        }
+    } else {
+        let stem = input_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("image");
+        format!(
+            "{}_{}_{}",
+            stem,
+            format_suffix(output_format),
+            quality_suffix(preset.quality_percent)
+        )
+    };
     let extension = target_extension(output_format, source_format);
     let mut candidate = output_directory.join(format!("{base_name}.{extension}"));
     let mut index = 1;
@@ -212,7 +259,8 @@ pub fn read_image_metadata(path: &Path) -> Result<ImageMetadata, String> {
     })
 }
 
-fn export_image_blocking(request: ImageExportRequest) -> Result<ImageExportResult, String> {
+fn export_image_blocking(request: ImageExportRequest, state: ImageJobState) -> Result<ImageExportResult, String> {
+    state.reset();
     let input_path = PathBuf::from(&request.source_path);
     let metadata = read_image_metadata(&input_path)?;
     let output_directory = PathBuf::from(&request.output_directory);
@@ -222,9 +270,19 @@ fn export_image_blocking(request: ImageExportRequest) -> Result<ImageExportResul
         &output_directory,
         &request.preset,
         &metadata.format,
+        request.custom_name.as_deref(),
     );
+
+    if state.is_canceled() {
+        return Err("导出已取消".to_string());
+    }
+
     let image = image::open(&input_path).map_err(|error| format!("无法打开图片: {error}"))?;
     let image = prepare_image_for_quality(image, request.preset.quality_percent);
+
+    if state.is_canceled() {
+        return Err("导出已取消".to_string());
+    }
 
     match effective_export_format(&request.preset) {
         ImageExportFormat::Jpeg => {
@@ -263,10 +321,20 @@ pub async fn get_image_metadata(path: String) -> Result<ImageMetadata, String> {
 }
 
 #[tauri::command]
-pub async fn export_image(request: ImageExportRequest) -> Result<ImageExportResult, String> {
-    tauri::async_runtime::spawn_blocking(move || export_image_blocking(request))
+pub async fn export_image(
+    request: ImageExportRequest,
+    state: State<'_, ImageJobState>,
+) -> Result<ImageExportResult, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || export_image_blocking(request, state))
         .await
         .map_err(|error| format!("图片导出任务异常结束: {error}"))?
+}
+
+#[tauri::command]
+pub fn cancel_current_image_export(state: State<'_, ImageJobState>) -> Result<(), String> {
+    state.mark_canceled();
+    Ok(())
 }
 
 #[cfg(test)]
@@ -279,7 +347,7 @@ mod tests {
 
     use super::{
         export_image_blocking, generate_image_output_path, ImageExportFormat, ImageExportRequest,
-        ImagePreset,
+        ImageJobState, ImagePreset,
     };
 
     #[test]
@@ -292,6 +360,7 @@ mod tests {
                 quality_percent: 60,
             },
             "jpeg",
+            None,
         );
 
         assert_eq!(path.file_name().unwrap(), "photo_webp_q60.webp");
@@ -307,6 +376,7 @@ mod tests {
                 quality_percent: 80,
             },
             "png",
+            None,
         );
 
         assert_eq!(path.file_name().unwrap(), "photo_original_q80.png");
@@ -322,6 +392,7 @@ mod tests {
                 quality_percent: 10,
             },
             "jpeg",
+            None,
         );
 
         assert_eq!(path.file_name().unwrap(), "photo_webp_q10.webp");
@@ -337,6 +408,7 @@ mod tests {
                 quality_percent: 10,
             },
             "png",
+            None,
         );
 
         assert_eq!(path.file_name().unwrap(), "photo_webp_q10.webp");
@@ -372,7 +444,8 @@ mod tests {
                 format: ImageExportFormat::Webp,
                 quality_percent: 40,
             },
-        })
+            custom_name: None,
+        }, ImageJobState::default())
         .unwrap();
 
         fs::remove_dir_all(&temp_dir).unwrap();
@@ -409,7 +482,8 @@ mod tests {
                 format: ImageExportFormat::Webp,
                 quality_percent: 40,
             },
-        })
+            custom_name: None,
+        }, ImageJobState::default())
         .unwrap();
         let output = image::open(&result.output_path).unwrap();
 
@@ -448,7 +522,8 @@ mod tests {
                 format: ImageExportFormat::Webp,
                 quality_percent: 10,
             },
-        })
+            custom_name: None,
+        }, ImageJobState::default())
         .unwrap();
         let output = image::open(&result.output_path).unwrap();
 
@@ -468,8 +543,25 @@ mod tests {
                 quality_percent: 37,
             },
             "jpeg",
+            None,
         );
 
         assert_eq!(path.file_name().unwrap(), "photo_webp_q37.webp");
+    }
+
+    #[test]
+    fn output_path_uses_custom_name_when_provided() {
+        let path = generate_image_output_path(
+            Path::new("/tmp/photo.jpg"),
+            Path::new("/tmp"),
+            &ImagePreset {
+                format: ImageExportFormat::Webp,
+                quality_percent: 60,
+            },
+            "jpeg",
+            Some("my_photo"),
+        );
+
+        assert_eq!(path.file_name().unwrap(), "my_photo.webp");
     }
 }

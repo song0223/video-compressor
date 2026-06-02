@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDefaultPreset, qualityPresets, resolutionPresets } from "./presets";
+import { getDefaultPreset, qualityPresets, resolutionPresets, videoFormatPresets } from "./presets";
 
 describe("presets", () => {
   it("includes the required resolution options", () => {
@@ -13,8 +13,8 @@ describe("presets", () => {
     ]);
   });
 
-  it("defaults to 720p balanced", () => {
-    expect(getDefaultPreset()).toEqual({ resolution: "720p", quality: "balanced" });
+  it("defaults to 720p balanced mp4", () => {
+    expect(getDefaultPreset()).toEqual({ resolution: "720p", quality: "balanced", format: "mp4" });
   });
 
   it("includes three quality levels", () => {
@@ -22,6 +22,15 @@ describe("presets", () => {
       "small",
       "balanced",
       "high",
+    ]);
+  });
+
+  it("includes four format options", () => {
+    expect(videoFormatPresets.map((preset) => preset.id)).toEqual([
+      "mp4",
+      "mov",
+      "mkv",
+      "webm",
     ]);
   });
 });

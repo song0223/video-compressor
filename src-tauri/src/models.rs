@@ -26,10 +26,28 @@ pub enum QualityPreset {
     High,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+pub enum VideoFormatPreset {
+    #[serde(rename = "mp4")]
+    Mp4,
+    #[serde(rename = "mov")]
+    Mov,
+    #[serde(rename = "mkv")]
+    Mkv,
+    #[serde(rename = "webm")]
+    Webm,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct ExportPreset {
     pub resolution: ResolutionPreset,
     pub quality: QualityPreset,
+    #[serde(default = "default_format")]
+    pub format: VideoFormatPreset,
+}
+
+fn default_format() -> VideoFormatPreset {
+    VideoFormatPreset::Mp4
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -59,6 +77,8 @@ pub struct ExportRequest {
     pub output_directory: String,
     pub preset: ExportPreset,
     pub duration_seconds: f64,
+    #[serde(default)]
+    pub custom_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

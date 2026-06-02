@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, ExternalLink, FolderOpen, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, Columns2, ExternalLink, FolderOpen, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { formatBytes, formatPercent } from "../../lib/format";
 import { clampImageQualityPercent, imageFormatPresets } from "../../lib/imagePresets";
 import {
@@ -14,6 +14,8 @@ interface ImageQueueTableProps {
   onOpenOutput: (path?: string) => void;
   onOpenOutputFolder: (path?: string) => void;
   onRemoveItem: (id: string) => void;
+  onRetryItem: (id: string) => void;
+  onCompare: (sourcePath: string, outputPath: string) => void;
 }
 
 const statusLabels: Record<ImageQueueStatus, string> = {
@@ -35,6 +37,8 @@ export function ImageQueueTable({
   onOpenOutput,
   onOpenOutputFolder,
   onRemoveItem,
+  onRetryItem,
+  onCompare,
 }: ImageQueueTableProps) {
   if (items.length === 0) {
     return (
@@ -140,6 +144,26 @@ export function ImageQueueTable({
                 >
                   <FolderOpen size={16} />
                 </button>
+                {item.status === "failed" ? (
+                  <button
+                    className="icon-button h-9 w-9 p-0"
+                    type="button"
+                    title="重试"
+                    onClick={() => onRetryItem(item.id)}
+                  >
+                    <RotateCcw size={16} />
+                  </button>
+                ) : null}
+                {item.status === "completed" && item.outputPath ? (
+                  <button
+                    className="icon-button h-9 w-9 p-0"
+                    type="button"
+                    title="对比压缩效果"
+                    onClick={() => onCompare(item.sourcePath, item.outputPath!)}
+                  >
+                    <Columns2 size={16} />
+                  </button>
+                ) : null}
                 <button
                   className="icon-button danger-button h-9 w-9 p-0"
                   type="button"

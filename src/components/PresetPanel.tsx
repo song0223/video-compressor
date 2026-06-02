@@ -1,6 +1,6 @@
 import { Settings2 } from "lucide-react";
-import { qualityPresets, resolutionPresets } from "../lib/presets";
-import type { QualityPresetId, ResolutionPresetId, VideoPreset } from "../types/video";
+import { qualityPresets, resolutionPresets, videoFormatPresets } from "../lib/presets";
+import type { QualityPresetId, ResolutionPresetId, VideoFormatPresetId, VideoPreset } from "../types/video";
 
 interface PresetPanelProps {
   selectedPreset: VideoPreset;
@@ -17,12 +17,36 @@ export function PresetPanel({ selectedPreset, onPresetChange, onApplyToAll }: Pr
     onPresetChange({ ...selectedPreset, quality });
   };
 
+  const setFormat = (format: VideoFormatPresetId) => {
+    onPresetChange({ ...selectedPreset, format });
+  };
+
   return (
     <aside className="tool-card flex h-fit flex-col gap-5 p-5">
       <div className="flex items-center gap-2">
         <Settings2 size={19} className="text-blue-700" />
         <h2 className="m-0 text-lg font-bold text-slate-950">导出预设</h2>
       </div>
+
+      <section>
+        <p className="mb-2 mt-0 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
+          输出格式
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {videoFormatPresets.map((preset) => (
+            <button
+              className={`icon-button min-h-10 ${
+                selectedPreset.format === preset.id ? "primary-button" : ""
+              }`}
+              key={preset.id}
+              type="button"
+              onClick={() => setFormat(preset.id)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section>
         <p className="mb-2 mt-0 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">

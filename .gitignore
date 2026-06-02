@@ -12,3 +12,4 @@ src-tauri/binaries/windows/ffprobe.exe
 .worktrees/
 *.log
 *.tmp
+CLAUDE.md

@@ -1,7 +1,7 @@
-import { Image, Video } from "lucide-react";
+import { Image, Music, Video } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type ToolId = "video" | "images";
+export type ToolId = "video" | "images" | "audio";
 
 interface AppShellProps {
   activeTool: ToolId;
@@ -12,6 +12,7 @@ interface AppShellProps {
 const tools: Array<{ id: ToolId; label: string; icon: typeof Video }> = [
   { id: "video", label: "视频压缩", icon: Video },
   { id: "images", label: "图片工具", icon: Image },
+  { id: "audio", label: "音频工具", icon: Music },
 ];
 
 export function AppShell({ activeTool, children, onToolChange }: AppShellProps) {

@@ -25,6 +25,7 @@ describe("output stats", () => {
     const estimate = estimateOutputSizeBytes(fourKSource, {
       resolution: "720p",
       quality: "balanced",
+      format: "mp4",
     });
 
     expect(estimate).toBeGreaterThan(100 * 1024 * 1024);
@@ -35,10 +36,12 @@ describe("output stats", () => {
     const balanced = estimateOutputSizeBytes(fourKSource, {
       resolution: "1080p",
       quality: "balanced",
+      format: "mp4",
     });
     const high = estimateOutputSizeBytes(fourKSource, {
       resolution: "1080p",
       quality: "high",
+      format: "mp4",
     });
 
     expect(high).toBeGreaterThan(balanced);
@@ -55,10 +58,12 @@ describe("output stats", () => {
     const p480 = estimateExportDurationSeconds(fourKSource, {
       resolution: "480p",
       quality: "balanced",
+      format: "mp4",
     });
     const p1080 = estimateExportDurationSeconds(fourKSource, {
       resolution: "1080p",
       quality: "balanced",
+      format: "mp4",
     });
 
     expect(p480).toBeLessThan(p1080);
@@ -68,10 +73,12 @@ describe("output stats", () => {
     const balanced = estimateExportDurationSeconds(longFourKSource, {
       resolution: "720p",
       quality: "balanced",
+      format: "mp4",
     });
     const high = estimateExportDurationSeconds(longFourKSource, {
       resolution: "720p",
       quality: "high",
+      format: "mp4",
     });
 
     expect(high).toBeGreaterThan(balanced);
@@ -81,6 +88,7 @@ describe("output stats", () => {
     const estimate = estimateExportDurationSeconds(longFourKSource, {
       resolution: "720p",
       quality: "balanced",
+      format: "mp4",
     });
 
     expect(estimate).toBeGreaterThanOrEqual(45);

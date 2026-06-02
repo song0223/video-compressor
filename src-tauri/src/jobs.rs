@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::ffmpeg::{build_ffmpeg_args, ffmpeg_path, parse_progress_update};
 use crate::models::{
     ExportPreset, ExportProgressEvent, ExportRequest, ExportResult, QualityPreset, ResolutionPreset,
+    VideoFormatPreset,
 };
 
 #[derive(Clone, Default)]
@@ -22,12 +23,14 @@ pub struct JobState {
 struct JobStateInner {
     current_pid: Mutex<Option<u32>>,
     canceled: AtomicBool,
+    paused: AtomicBool,
 }
 
 impl JobState {
     pub fn set_current_pid(&self, pid: u32) {
         *self.inner.current_pid.lock().expect("job pid mutex poisoned") = Some(pid);
         self.inner.canceled.store(false, Ordering::SeqCst);
+        self.inner.paused.store(false, Ordering::SeqCst);
     }
 
     pub fn clear_current_pid(&self) {
@@ -44,6 +47,18 @@ impl JobState {
 
     pub fn is_canceled(&self) -> bool {
         self.inner.canceled.load(Ordering::SeqCst)
+    }
+
+    pub fn mark_paused(&self) {
+        self.inner.paused.store(true, Ordering::SeqCst);
+    }
+
+    pub fn mark_resumed(&self) {
+        self.inner.paused.store(false, Ordering::SeqCst);
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.inner.paused.load(Ordering::SeqCst)
     }
 }
 
@@ -66,22 +81,49 @@ fn quality_suffix(quality: QualityPreset) -> &'static str {
     }
 }
 
-pub fn generate_output_path(input_path: &Path, output_directory: &Path, preset: &ExportPreset) -> PathBuf {
-    let stem = input_path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("video");
-    let base_name = format!(
-        "{}_{}_{}",
-        stem,
-        resolution_suffix(preset.resolution),
-        quality_suffix(preset.quality)
-    );
-    let mut candidate = output_directory.join(format!("{base_name}.mp4"));
+fn format_extension(format: VideoFormatPreset) -> &'static str {
+    match format {
+        VideoFormatPreset::Mp4 => "mp4",
+        VideoFormatPreset::Mov => "mov",
+        VideoFormatPreset::Mkv => "mkv",
+        VideoFormatPreset::Webm => "webm",
+    }
+}
+
+pub fn generate_output_path(input_path: &Path, output_directory: &Path, preset: &ExportPreset, custom_name: Option<&str>) -> PathBuf {
+    let base_name = if let Some(name) = custom_name {
+        if !name.is_empty() {
+            name.to_string()
+        } else {
+            let stem = input_path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("video");
+            format!(
+                "{}_{}_{}",
+                stem,
+                resolution_suffix(preset.resolution),
+                quality_suffix(preset.quality)
+            )
+        }
+    } else {
+        let stem = input_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("video");
+        format!(
+            "{}_{}_{}",
+            stem,
+            resolution_suffix(preset.resolution),
+            quality_suffix(preset.quality)
+        )
+    };
+    let ext = format_extension(preset.format);
+    let mut candidate = output_directory.join(format!("{base_name}.{ext}"));
     let mut index = 1;
 
     while candidate.exists() {
-        candidate = output_directory.join(format!("{base_name}-{index}.mp4"));
+        candidate = output_directory.join(format!("{base_name}-{index}.{ext}"));
         index += 1;
     }
 
@@ -108,6 +150,7 @@ fn export_video_blocking(
         &input_path,
         Path::new(&request.output_directory),
         &request.preset,
+        request.custom_name.as_deref(),
     );
     let mut child = Command::new(ffmpeg_path())
         .args(ffmpeg_progress_args(&input_path, &output_path, &request.preset))
@@ -196,13 +239,39 @@ pub fn cancel_current_export(state: State<'_, JobState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn pause_current_export(state: State<'_, JobState>) -> Result<(), String> {
+    state.mark_paused();
+    if let Some(pid) = state.current_pid() {
+        #[cfg(not(windows))]
+        let result = Command::new("kill").arg("-STOP").arg(pid.to_string()).status();
+        #[cfg(windows)]
+        let result = Ok(());
+        result.map_err(|error| format!("暂停导出失败: {error}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn resume_current_export(state: State<'_, JobState>) -> Result<(), String> {
+    state.mark_resumed();
+    if let Some(pid) = state.current_pid() {
+        #[cfg(not(windows))]
+        let result = Command::new("kill").arg("-CONT").arg(pid.to_string()).status();
+        #[cfg(windows)]
+        let result = Ok(());
+        result.map_err(|error| format!("恢复导出失败: {error}"))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::Path;
 
     use crate::jobs::{generate_output_path, JobState};
-    use crate::models::{ExportPreset, QualityPreset, ResolutionPreset};
+    use crate::models::{ExportPreset, QualityPreset, ResolutionPreset, VideoFormatPreset};
 
     #[test]
     fn output_path_uses_preset_suffix_and_mp4_extension() {
@@ -212,7 +281,9 @@ mod tests {
             &ExportPreset {
                 resolution: ResolutionPreset::P720,
                 quality: QualityPreset::Balanced,
+                format: VideoFormatPreset::Mp4,
             },
+            None,
         );
 
         assert_eq!(path.file_name().unwrap(), "source_720p_balanced.mp4");
@@ -230,7 +301,9 @@ mod tests {
             &ExportPreset {
                 resolution: ResolutionPreset::P720,
                 quality: QualityPreset::Balanced,
+                format: VideoFormatPreset::Mp4,
             },
+            None,
         );
 
         fs::remove_dir_all(&temp_dir).unwrap();
@@ -245,5 +318,21 @@ mod tests {
 
         assert!(state.is_canceled());
         assert_eq!(state.current_pid(), Some(1234));
+    }
+
+    #[test]
+    fn output_path_uses_custom_name_when_provided() {
+        let path = generate_output_path(
+            Path::new("/tmp/source.mov"),
+            Path::new("/tmp"),
+            &ExportPreset {
+                resolution: ResolutionPreset::P720,
+                quality: QualityPreset::Balanced,
+                format: VideoFormatPreset::Mp4,
+            },
+            Some("my_video"),
+        );
+
+        assert_eq!(path.file_name().unwrap(), "my_video.mp4");
     }
 }

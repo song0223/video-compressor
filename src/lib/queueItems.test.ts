@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { QueueItem, VideoPreset } from "../types/video";
 import { applyPresetToEditableItems } from "./queueItems";
 
-const nextPreset: VideoPreset = { resolution: "480p", quality: "small" };
+const nextPreset: VideoPreset = { resolution: "480p", quality: "small", format: "mp4" };
 
 function item(status: QueueItem["status"]): QueueItem {
   return {
     id: status,
     sourcePath: `/tmp/${status}.mp4`,
     fileName: `${status}.mp4`,
-    preset: { resolution: "720p", quality: "balanced" },
+    preset: { resolution: "720p", quality: "balanced", format: "mp4" },
     status,
     progress: { percent: status === "completed" ? 1 : 0 },
   };
@@ -31,10 +31,12 @@ describe("queue item helpers", () => {
     expect(updated.find((entry) => entry.id === "running")?.preset).toEqual({
       resolution: "720p",
       quality: "balanced",
+      format: "mp4",
     });
     expect(updated.find((entry) => entry.id === "completed")?.preset).toEqual({
       resolution: "720p",
       quality: "balanced",
+      format: "mp4",
     });
   });
 });

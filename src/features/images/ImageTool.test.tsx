@@ -29,6 +29,7 @@ afterEach(() => {
   cleanup();
   invokeMock.mockReset();
   openMock.mockReset();
+  localStorage.clear();
 });
 
 describe("ImageTool", () => {

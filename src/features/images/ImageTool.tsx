@@ -1,11 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { FolderCog, Images, Play, Trash2, X } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { FolderCog, Images, PenLine, Play, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  addCompletionMessage,
+  completionBadgeCount,
+  dismissCompletionMessage,
+  type CompletionMessage,
+} from "../../lib/completionMessages";
+import {
+  appCompletionNotifier,
+  setExportCompletionBadge,
+} from "../../lib/completionNotifications";
+import { ImageCompareView } from "../../components/ImageCompareView";
 import { directoryFromPath, fileNameFromPath } from "../../lib/filePaths";
 import { getDefaultImagePreset } from "../../lib/imagePresets";
 import { imageExtensions, isSupportedImage } from "../../lib/imageStats";
+import { loadImagePreset, saveImagePreset, loadOutputDirectory, saveOutputDirectory } from "../../lib/settingsStorage";
 import type { ImageMetadata, ImagePreset, ImageQueueItem } from "../../types/image";
 import { ImageDropZone } from "./ImageDropZone";
 import { ImagePresetPanel } from "./ImagePresetPanel";
@@ -17,10 +29,33 @@ interface ImageExportResult {
 }
 
 export function ImageTool() {
-  const [selectedPreset, setSelectedPreset] = useState<ImagePreset>(getDefaultImagePreset());
+  const [selectedPreset, setSelectedPreset] = useState<ImagePreset>(() => {
+    return loadImagePreset() ?? getDefaultImagePreset();
+  });
   const [items, setItems] = useState<ImageQueueItem[]>([]);
-  const [outputDirectory, setOutputDirectory] = useState("");
+  const [outputDirectory, setOutputDirectory] = useState(() => loadOutputDirectory("images"));
   const [notice, setNotice] = useState("");
+  const [completionMessages, setCompletionMessages] = useState<CompletionMessage[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [comparePaths, setComparePaths] = useState<{ original: string; compressed: string } | null>(null);
+
+  const completionNotificationCount = useMemo(
+    () => completionBadgeCount(completionMessages),
+    [completionMessages],
+  );
+
+  useEffect(() => {
+    void setExportCompletionBadge(completionNotificationCount, appCompletionNotifier);
+  }, [completionNotificationCount]);
+
+  useEffect(() => {
+    saveImagePreset(selectedPreset);
+  }, [selectedPreset]);
+
+  useEffect(() => {
+    saveOutputDirectory("images", outputDirectory);
+  }, [outputDirectory]);
 
   const totalProgress = useMemo(() => {
     if (items.length === 0) return 0;
@@ -124,10 +159,33 @@ export function ImageTool() {
   const clearQueue = () => {
     setItems([]);
     setNotice("");
+    setCompletionMessages([]);
   };
 
   const removeItem = (id: string) => {
     setItems((current) => current.filter((item) => item.id !== id));
+  };
+
+  const retryItem = (id: string) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id
+          ? { ...item, status: "waiting", errorMessage: undefined, progress: { percent: 0 } }
+          : item,
+      ),
+    );
+  };
+
+  const dismissCompletion = (id: string) => {
+    setCompletionMessages((current) => dismissCompletionMessage(current, id));
+  };
+
+  const cancelExport = async () => {
+    try {
+      await invoke("cancel_current_image_export");
+    } catch (error) {
+      setNotice(`取消导出失败：${String(error)}`);
+    }
   };
 
   const startAll = async () => {
@@ -141,6 +199,9 @@ export function ImageTool() {
     }
 
     setNotice("");
+    setCompletionMessages([]);
+    setIsExporting(true);
+    let completedInRun = 0;
     const queue = items.filter((item) => item.status === "waiting" || item.status === "failed");
     for (const item of queue) {
       setItems((current) =>
@@ -158,6 +219,7 @@ export function ImageTool() {
             sourcePath: item.sourcePath,
             outputDirectory,
             preset: item.preset,
+            customName: customName || undefined,
           },
         });
         setItems((current) =>
@@ -175,17 +237,34 @@ export function ImageTool() {
               : entry,
           ),
         );
+        completedInRun += 1;
+        setCompletionMessages((current) =>
+          addCompletionMessage(current, `已完成 ${completedInRun} 张图片导出：${item.fileName}`),
+        );
+        appCompletionNotifier.playCompletionSound();
       } catch (error) {
+        const errorMsg = String(error);
         setItems((current) =>
           current.map((entry) =>
             entry.id === item.id
-              ? { ...entry, status: "failed", errorMessage: String(error) }
+              ? { ...entry, status: "failed", errorMessage: errorMsg }
               : entry,
           ),
         );
+        if (errorMsg.includes("导出已取消")) {
+          setItems((current) =>
+            current.map((entry) =>
+              entry.status === "running"
+                ? { ...entry, status: "waiting", errorMessage: undefined, progress: { percent: 0 } }
+                : entry,
+            ),
+          );
+          break;
+        }
         break;
       }
     }
+    setIsExporting(false);
   };
 
   const openOutputPath = async (path?: string) => {
@@ -218,6 +297,16 @@ export function ImageTool() {
             <p className="m-0 mt-1 truncate text-sm text-slate-500">
               {outputDirectory ? `输出到 ${outputDirectory}` : "默认输出到第一张图片所在目录"}
             </p>
+            <div className="mt-2 flex items-center gap-2">
+              <PenLine size={14} className="text-slate-400" />
+              <input
+                className="w-64 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none"
+                type="text"
+                placeholder="自定义输出文件名（留空自动生成）"
+                value={customName}
+                onChange={(e) => setCustomName(e.currentTarget.value)}
+              />
+            </div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -245,6 +334,27 @@ export function ImageTool() {
         </div>
       ) : null}
 
+      {completionMessages.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {completionMessages.map((message) => (
+            <div
+              className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900"
+              key={message.id}
+            >
+              <span className="min-w-0 truncate">{message.text}</span>
+              <button
+                className="icon-button h-8 w-8 shrink-0 p-0"
+                type="button"
+                title="关闭完成消息"
+                onClick={() => dismissCompletion(message.id)}
+              >
+                <X size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <section className="tool-main-grid">
         <div className="flex min-w-0 flex-col gap-4">
           <ImageDropZone onAddImages={selectImages} onAddPaths={addImagePaths} />
@@ -253,6 +363,8 @@ export function ImageTool() {
             onOpenOutput={openOutputPath}
             onOpenOutputFolder={openOutputFolder}
             onRemoveItem={removeItem}
+            onRetryItem={retryItem}
+            onCompare={(original, compressed) => setComparePaths({ original, compressed })}
           />
         </div>
 
@@ -278,12 +390,27 @@ export function ImageTool() {
             <Trash2 size={16} />
             清空
           </button>
-          <button className="icon-button primary-button" type="button" onClick={startAll}>
-            <Play size={16} />
-            全部导出
-          </button>
+          {isExporting ? (
+            <button className="icon-button danger-button" type="button" onClick={cancelExport}>
+              <X size={16} />
+              取消导出
+            </button>
+          ) : (
+            <button className="icon-button primary-button" type="button" onClick={startAll}>
+              <Play size={16} />
+              全部导出
+            </button>
+          )}
         </div>
       </section>
+
+      {comparePaths ? (
+        <ImageCompareView
+          originalPath={comparePaths.original}
+          compressedPath={comparePaths.compressed}
+          onClose={() => setComparePaths(null)}
+        />
+      ) : null}
     </div>
   );
 }

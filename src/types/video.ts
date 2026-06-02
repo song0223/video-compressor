@@ -1,9 +1,11 @@
 export type ResolutionPresetId = "480p" | "720p" | "1080p" | "2k" | "4k" | "original";
 export type QualityPresetId = "small" | "balanced" | "high";
+export type VideoFormatPresetId = "mp4" | "mov" | "mkv" | "webm";
 
 export interface VideoPreset {
   resolution: ResolutionPresetId;
   quality: QualityPresetId;
+  format: VideoFormatPresetId;
 }
 
 export interface VideoMetadata {

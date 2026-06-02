@@ -1,14 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { X } from "lucide-react";
+import { FolderCog, Music, PenLine, Play, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DropZone } from "../../components/DropZone";
-import { FooterProgress } from "../../components/FooterProgress";
-import { PresetPanel } from "../../components/PresetPanel";
-import { QueueTable } from "../../components/QueueTable";
-import { Toolbar } from "../../components/Toolbar";
 import {
   addCompletionMessage,
   completionBadgeCount,
@@ -20,41 +14,28 @@ import {
   setExportCompletionBadge,
 } from "../../lib/completionNotifications";
 import { directoryFromPath, fileNameFromPath } from "../../lib/filePaths";
-import { getDefaultPreset } from "../../lib/presets";
-import { applyPresetToEditableItems } from "../../lib/queueItems";
-import { loadVideoPreset, saveVideoPreset, loadOutputDirectory, saveOutputDirectory } from "../../lib/settingsStorage";
-import type { QueueItem, VideoMetadata, VideoPreset } from "../../types/video";
+import { getDefaultAudioPreset, audioExtensions, isSupportedAudio } from "../../lib/audioPresets";
+import { loadAudioPreset, saveAudioPreset, loadOutputDirectory, saveOutputDirectory } from "../../lib/settingsStorage";
+import type { AudioMetadata, AudioPreset, AudioQueueItem } from "../../types/audio";
+import { AudioDropZone } from "./AudioDropZone";
+import { AudioPresetPanel } from "./AudioPresetPanel";
+import { AudioQueueTable } from "./AudioQueueTable";
 
-const videoExtensions = ["mp4", "mov", "mkv", "avi", "webm", "m4v", "flv", "wmv", "ts", "mpeg", "mpg", "3gp", "mts"];
-
-function isSupportedVideo(path: string): boolean {
-  const extension = path.split(".").pop()?.toLowerCase();
-  return extension ? videoExtensions.includes(extension) : false;
-}
-
-interface ExportProgressPayload {
-  id: string;
-  percent: number;
-  outputSizeBytes?: number;
-  speedText?: string;
-  etaSeconds?: number;
-}
-
-interface ExportResult {
+interface AudioExportResult {
   outputPath: string;
   outputSizeBytes: number;
 }
 
-export function VideoTool() {
-  const [selectedPreset, setSelectedPreset] = useState<VideoPreset>(() => {
-    return loadVideoPreset() ?? getDefaultPreset();
+export function AudioTool() {
+  const [selectedPreset, setSelectedPreset] = useState<AudioPreset>(() => {
+    return loadAudioPreset() ?? getDefaultAudioPreset();
   });
-  const [items, setItems] = useState<QueueItem[]>([]);
-  const [outputDirectory, setOutputDirectory] = useState(() => loadOutputDirectory("video"));
+  const [items, setItems] = useState<AudioQueueItem[]>([]);
+  const [outputDirectory, setOutputDirectory] = useState(() => loadOutputDirectory("audio"));
   const [notice, setNotice] = useState("");
-  const [isPaused, setIsPaused] = useState(false);
-  const [customName, setCustomName] = useState("");
   const [completionMessages, setCompletionMessages] = useState<CompletionMessage[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [customName, setCustomName] = useState("");
 
   const completionNotificationCount = useMemo(
     () => completionBadgeCount(completionMessages),
@@ -66,62 +47,23 @@ export function VideoTool() {
   }, [completionNotificationCount]);
 
   useEffect(() => {
-    saveVideoPreset(selectedPreset);
+    saveAudioPreset(selectedPreset);
   }, [selectedPreset]);
 
   useEffect(() => {
-    saveOutputDirectory("video", outputDirectory);
+    saveOutputDirectory("audio", outputDirectory);
   }, [outputDirectory]);
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen<ExportProgressPayload>("export-progress", (event) => {
-      setItems((current) =>
-        current.map((item) =>
-          item.id === event.payload.id
-            ? {
-                ...item,
-                progress: {
-                  ...item.progress,
-                  percent: event.payload.percent,
-                  outputSizeBytes: event.payload.outputSizeBytes ?? item.progress.outputSizeBytes,
-                  speedText: event.payload.speedText ?? item.progress.speedText,
-                  etaSeconds: event.payload.etaSeconds ?? item.progress.etaSeconds,
-                },
-              }
-            : item,
-        ),
-      );
-    })
-      .then((dispose) => {
-        unlisten = dispose;
-      })
-      .catch(() => undefined);
-
-    return () => {
-      unlisten?.();
-    };
-  }, []);
 
   const totalProgress = useMemo(() => {
     if (items.length === 0) return 0;
     return items.reduce((sum, item) => sum + item.progress.percent, 0) / items.length;
   }, [items]);
 
-  const updateSelectedPreset = (preset: VideoPreset) => {
-    setSelectedPreset(preset);
-    setItems((current) => applyPresetToEditableItems(current, preset));
-  };
-
-  const applyPresetToAll = () => {
-    setItems((current) => applyPresetToEditableItems(current, selectedPreset));
-  };
-
-  const addVideoPaths = useCallback(
+  const addAudioPaths = useCallback(
     async (paths: string[]) => {
-      const uniquePaths = Array.from(new Set(paths.filter(isSupportedVideo)));
+      const uniquePaths = Array.from(new Set(paths.filter(isSupportedAudio)));
       if (uniquePaths.length === 0) {
-        setNotice("没有找到支持的视频文件。");
+        setNotice("没有找到支持的音频文件。");
         return;
       }
 
@@ -133,7 +75,7 @@ export function VideoTool() {
         }
 
         const id = crypto.randomUUID();
-        const baseItem: QueueItem = {
+        const baseItem: AudioQueueItem = {
           id,
           sourcePath,
           fileName: fileNameFromPath(sourcePath),
@@ -144,7 +86,7 @@ export function VideoTool() {
         setItems((current) => [...current, baseItem]);
 
         try {
-          const metadata = await invoke<VideoMetadata>("get_video_metadata", { path: sourcePath });
+          const metadata = await invoke<AudioMetadata>("get_audio_metadata", { path: sourcePath });
           setItems((current) =>
             current.map((item) => (item.id === id ? { ...item, metadata } : item)),
           );
@@ -162,17 +104,17 @@ export function VideoTool() {
     [items, selectedPreset],
   );
 
-  const selectVideos = async () => {
+  const selectAudio = async () => {
     try {
       const selected = await open({
         multiple: true,
         directory: false,
-        filters: [{ name: "Videos", extensions: videoExtensions }],
+        filters: [{ name: "Audio", extensions: audioExtensions }],
       });
       if (Array.isArray(selected)) {
-        await addVideoPaths(selected);
+        await addAudioPaths(selected);
       } else if (selected) {
-        await addVideoPaths([selected]);
+        await addAudioPaths([selected]);
       }
     } catch (error) {
       setNotice(`当前环境无法打开文件选择器：${String(error)}`);
@@ -188,6 +130,27 @@ export function VideoTool() {
     } catch (error) {
       setNotice(`当前环境无法选择输出位置：${String(error)}`);
     }
+  };
+
+  const updateSelectedPreset = (preset: AudioPreset) => {
+    setSelectedPreset(preset);
+    setItems((current) =>
+      current.map((item) =>
+        item.status === "running" || item.status === "completed"
+          ? item
+          : { ...item, preset },
+      ),
+    );
+  };
+
+  const applyPresetToAll = () => {
+    setItems((current) =>
+      current.map((item) =>
+        item.status === "running" || item.status === "completed"
+          ? item
+          : { ...item, preset: selectedPreset },
+      ),
+    );
   };
 
   const clearQueue = () => {
@@ -214,9 +177,25 @@ export function VideoTool() {
     setCompletionMessages((current) => dismissCompletionMessage(current, id));
   };
 
+  const updateItemPreset = (id: string, preset: AudioPreset) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, preset } : item,
+      ),
+    );
+  };
+
+  const cancelExport = async () => {
+    try {
+      await invoke("cancel_current_audio_export");
+    } catch (error) {
+      setNotice(`取消导出失败：${String(error)}`);
+    }
+  };
+
   const startAll = async () => {
     if (items.length === 0) {
-      setNotice("请先添加视频。");
+      setNotice("请先添加音频文件。");
       return;
     }
     if (!outputDirectory) {
@@ -226,26 +205,25 @@ export function VideoTool() {
 
     setNotice("");
     setCompletionMessages([]);
-    setIsPaused(false);
+    setIsExporting(true);
     let completedInRun = 0;
     const queue = items.filter((item) => item.status === "waiting" || item.status === "failed");
     for (const item of queue) {
       setItems((current) =>
         current.map((entry) =>
           entry.id === item.id
-            ? { ...entry, status: "running", errorMessage: undefined, progress: { percent: 0 } }
+            ? { ...entry, status: "running", errorMessage: undefined, progress: { percent: 0.35 } }
             : entry,
         ),
       );
 
       try {
-        const result = await invoke<ExportResult>("export_video", {
+        const result = await invoke<AudioExportResult>("export_audio", {
           request: {
             id: item.id,
             sourcePath: item.sourcePath,
             outputDirectory,
             preset: item.preset,
-            durationSeconds: item.metadata?.durationSeconds ?? 0,
             customName: customName || undefined,
           },
         });
@@ -257,7 +235,6 @@ export function VideoTool() {
                   status: "completed",
                   outputPath: result.outputPath,
                   progress: {
-                    ...entry.progress,
                     percent: 1,
                     outputSizeBytes: result.outputSizeBytes,
                   },
@@ -267,51 +244,32 @@ export function VideoTool() {
         );
         completedInRun += 1;
         setCompletionMessages((current) =>
-          addCompletionMessage(current, `已完成 ${completedInRun} 个导出：${item.fileName}`),
+          addCompletionMessage(current, `已完成 ${completedInRun} 个音频导出：${item.fileName}`),
         );
         appCompletionNotifier.playCompletionSound();
       } catch (error) {
-        const message = String(error);
+        const errorMsg = String(error);
         setItems((current) =>
           current.map((entry) =>
             entry.id === item.id
-              ? {
-                  ...entry,
-                  status: message.includes("取消") ? "canceled" : "failed",
-                  errorMessage: message,
-                }
+              ? { ...entry, status: "failed", errorMessage: errorMsg }
               : entry,
           ),
         );
+        if (errorMsg.includes("导出已取消")) {
+          setItems((current) =>
+            current.map((entry) =>
+              entry.status === "running"
+                ? { ...entry, status: "waiting", errorMessage: undefined, progress: { percent: 0 } }
+                : entry,
+            ),
+          );
+          break;
+        }
         break;
       }
     }
-  };
-
-  const cancelCurrent = async () => {
-    try {
-      await invoke("cancel_current_export");
-    } catch (error) {
-      setNotice(`取消失败：${String(error)}`);
-    }
-  };
-
-  const pauseCurrent = async () => {
-    try {
-      await invoke("pause_current_export");
-      setIsPaused(true);
-    } catch (error) {
-      setNotice(`暂停失败：${String(error)}`);
-    }
-  };
-
-  const resumeCurrent = async () => {
-    try {
-      await invoke("resume_current_export");
-      setIsPaused(false);
-    } catch (error) {
-      setNotice(`恢复失败：${String(error)}`);
-    }
+    setIsExporting(false);
   };
 
   const openOutputPath = async (path?: string) => {
@@ -334,18 +292,50 @@ export function VideoTool() {
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <Toolbar
-        itemCount={items.length}
-        outputDirectory={outputDirectory}
-        customName={customName}
-        onAddVideos={selectVideos}
-        onChooseOutput={selectOutputDirectory}
-        onCustomNameChange={setCustomName}
-      />
+      <section className="tool-card flex items-center justify-between gap-4 px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-violet-50 text-violet-700">
+            <Music size={24} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="m-0 text-xl font-black text-slate-950">音频工具</h1>
+            <p className="m-0 mt-1 truncate text-sm text-slate-500">
+              {outputDirectory ? `输出到 ${outputDirectory}` : "默认输出到第一个音频所在目录"}
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <PenLine size={14} className="text-slate-400" />
+              <input
+                className="w-64 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none"
+                type="text"
+                placeholder="自定义输出文件名（留空自动生成）"
+                value={customName}
+                onChange={(e) => setCustomName(e.currentTarget.value)}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="rounded-md bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600">
+            {items.length} 个音频
+          </span>
+          <button className="icon-button" type="button" onClick={selectOutputDirectory}>
+            <FolderCog size={16} />
+            输出位置
+          </button>
+        </div>
+      </section>
 
       {notice ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-          {notice}
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          <span>{notice}</span>
+          <button
+            className="icon-button h-8 w-8 shrink-0 p-0"
+            type="button"
+            title="关闭提示"
+            onClick={() => setNotice("")}
+          >
+            <X size={15} />
+          </button>
         </div>
       ) : null}
 
@@ -372,33 +362,52 @@ export function VideoTool() {
 
       <section className="tool-main-grid">
         <div className="flex min-w-0 flex-col gap-4">
-          <DropZone onAddVideos={selectVideos} onAddPaths={addVideoPaths} />
-          <QueueTable
+          <AudioDropZone onAddAudio={selectAudio} onAddPaths={addAudioPaths} />
+          <AudioQueueTable
             items={items}
             onOpenOutput={openOutputPath}
             onOpenOutputFolder={openOutputFolder}
             onRemoveItem={removeItem}
             onRetryItem={retryItem}
+            onPresetChange={updateItemPreset}
           />
         </div>
 
-        <PresetPanel
+        <AudioPresetPanel
           selectedPreset={selectedPreset}
           onPresetChange={updateSelectedPreset}
           onApplyToAll={applyPresetToAll}
         />
       </section>
 
-      <FooterProgress
-        items={items}
-        progress={totalProgress}
-        onClearQueue={clearQueue}
-        onStartAll={startAll}
-        onCancelCurrent={cancelCurrent}
-        onPauseCurrent={pauseCurrent}
-        onResumeCurrent={resumeCurrent}
-        isPaused={isPaused}
-      />
+      <section className="tool-card flex items-center justify-between gap-5 px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex items-center justify-between text-sm font-bold text-slate-600">
+            <span>音频导出进度</span>
+            <span>{Math.round(totalProgress * 100)}%</span>
+          </div>
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${Math.round(totalProgress * 100)}%` }} />
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button className="icon-button danger-button" type="button" onClick={clearQueue}>
+            <Trash2 size={16} />
+            清空
+          </button>
+          {isExporting ? (
+            <button className="icon-button danger-button" type="button" onClick={cancelExport}>
+              <X size={16} />
+              取消导出
+            </button>
+          ) : (
+            <button className="icon-button primary-button" type="button" onClick={startAll}>
+              <Play size={16} />
+              全部导出
+            </button>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

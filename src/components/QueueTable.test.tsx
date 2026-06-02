@@ -9,7 +9,7 @@ const item: QueueItem = {
   id: "video-1",
   sourcePath: "/Users/songxiang/Movies/demo.mp4",
   fileName: "demo.mp4",
-  preset: { resolution: "720p", quality: "balanced" },
+  preset: { resolution: "720p", quality: "balanced", format: "mp4" },
   status: "waiting",
   progress: { percent: 0 },
   metadata: {
@@ -33,6 +33,7 @@ describe("QueueTable", () => {
         onOpenOutput={vi.fn()}
         onOpenOutputFolder={vi.fn()}
         onRemoveItem={vi.fn()}
+        onRetryItem={vi.fn()}
       />,
     );
 
@@ -47,6 +48,7 @@ describe("QueueTable", () => {
         onOpenOutput={vi.fn()}
         onOpenOutputFolder={vi.fn()}
         onRemoveItem={vi.fn()}
+        onRetryItem={vi.fn()}
       />,
     );
 
@@ -60,6 +62,7 @@ describe("QueueTable", () => {
         onOpenOutput={vi.fn()}
         onOpenOutputFolder={vi.fn()}
         onRemoveItem={vi.fn()}
+        onRetryItem={vi.fn()}
       />,
     );
 
@@ -83,6 +86,7 @@ describe("QueueTable", () => {
         onOpenOutput={vi.fn()}
         onOpenOutputFolder={vi.fn()}
         onRemoveItem={vi.fn()}
+        onRetryItem={vi.fn()}
       />,
     );
 

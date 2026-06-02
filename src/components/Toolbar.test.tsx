@@ -14,8 +14,10 @@ describe("Toolbar", () => {
       <Toolbar
         itemCount={0}
         outputDirectory=""
+        customName=""
         onAddVideos={vi.fn()}
         onChooseOutput={vi.fn()}
+        onCustomNameChange={vi.fn()}
       />,
     );
 

@@ -1,4 +1,4 @@
-import type { QualityPresetId, ResolutionPresetId, VideoPreset } from "../types/video";
+import type { QualityPresetId, ResolutionPresetId, VideoFormatPresetId, VideoPreset } from "../types/video";
 
 export const resolutionPresets: Array<{ id: ResolutionPresetId; label: string; height?: number }> = [
   { id: "480p", label: "480p", height: 480 },
@@ -15,6 +15,13 @@ export const qualityPresets: Array<{ id: QualityPresetId; label: string }> = [
   { id: "high", label: "高清优先" },
 ];
 
+export const videoFormatPresets: Array<{ id: VideoFormatPresetId; label: string }> = [
+  { id: "mp4", label: "MP4" },
+  { id: "mov", label: "MOV" },
+  { id: "mkv", label: "MKV" },
+  { id: "webm", label: "WebM" },
+];
+
 export function getDefaultPreset(): VideoPreset {
-  return { resolution: "720p", quality: "balanced" };
+  return { resolution: "720p", quality: "balanced", format: "mp4" };
 }

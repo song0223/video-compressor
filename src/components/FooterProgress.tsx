@@ -8,6 +8,9 @@ interface FooterProgressProps {
   onClearQueue: () => void;
   onStartAll: () => void;
   onCancelCurrent: () => void;
+  onPauseCurrent: () => void;
+  onResumeCurrent: () => void;
+  isPaused: boolean;
 }
 
 export function FooterProgress({
@@ -16,6 +19,9 @@ export function FooterProgress({
   onClearQueue,
   onStartAll,
   onCancelCurrent,
+  onPauseCurrent,
+  onResumeCurrent,
+  isPaused,
 }: FooterProgressProps) {
   const completed = items.filter((item) => item.status === "completed").length;
   const running = items.find((item) => item.status === "running");
@@ -47,9 +53,15 @@ export function FooterProgress({
           <Play size={17} />
           全部导出
         </button>
-        <button className="icon-button" type="button" title="暂停当前任务" disabled>
-          <Pause size={17} />
-          暂停
+        <button
+          className="icon-button"
+          type="button"
+          title={isPaused ? "恢复当前任务" : "暂停当前任务"}
+          onClick={isPaused ? onResumeCurrent : onPauseCurrent}
+          disabled={!running}
+        >
+          {isPaused ? <Play size={17} /> : <Pause size={17} />}
+          {isPaused ? "恢复" : "暂停"}
         </button>
         <button className="icon-button danger-button" type="button" title="取消当前任务" onClick={onCancelCurrent}>
           <Square size={16} />

@@ -4,7 +4,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 
-use crate::models::{ExportPreset, ProgressSnapshot, QualityPreset, ResolutionPreset, VideoMetadata};
+use crate::models::{ExportPreset, ProgressSnapshot, QualityPreset, ResolutionPreset, VideoFormatPreset, VideoMetadata};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct QualitySettings {
@@ -60,22 +60,40 @@ pub fn build_ffmpeg_args(input_path: &Path, output_path: &Path, preset: &ExportP
         args.push(filter);
     }
 
-    args.extend([
-        "-c:v".to_string(),
-        "libx264".to_string(),
-        "-preset".to_string(),
-        quality.encoder_preset.to_string(),
-        "-crf".to_string(),
-        quality.crf.to_string(),
-        "-threads".to_string(),
-        quality.max_threads.to_string(),
-        "-c:a".to_string(),
-        "copy".to_string(),
-        "-movflags".to_string(),
-        "+faststart".to_string(),
-        output_path.to_string_lossy().to_string(),
-    ]);
+    match preset.format {
+        VideoFormatPreset::Webm => {
+            args.extend([
+                "-c:v".to_string(),
+                "libvpx-vp9".to_string(),
+                "-crf".to_string(),
+                quality.crf.to_string(),
+                "-b:v".to_string(),
+                "0".to_string(),
+                "-threads".to_string(),
+                quality.max_threads.to_string(),
+                "-c:a".to_string(),
+                "libopus".to_string(),
+            ]);
+        }
+        _ => {
+            args.extend([
+                "-c:v".to_string(),
+                "libx264".to_string(),
+                "-preset".to_string(),
+                quality.encoder_preset.to_string(),
+                "-crf".to_string(),
+                quality.crf.to_string(),
+                "-threads".to_string(),
+                quality.max_threads.to_string(),
+                "-c:a".to_string(),
+                "copy".to_string(),
+                "-movflags".to_string(),
+                "+faststart".to_string(),
+            ]);
+        }
+    }
 
+    args.push(output_path.to_string_lossy().to_string());
     args
 }
 
@@ -270,6 +288,7 @@ mod tests {
             &ExportPreset {
                 resolution: ResolutionPreset::P720,
                 quality: QualityPreset::Balanced,
+                format: crate::models::VideoFormatPreset::Mp4,
             },
         );
 
@@ -286,6 +305,7 @@ mod tests {
             &ExportPreset {
                 resolution: ResolutionPreset::P720,
                 quality: QualityPreset::Balanced,
+                format: crate::models::VideoFormatPreset::Mp4,
             },
         );
 

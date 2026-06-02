@@ -15,6 +15,7 @@ interface QueueTableProps {
   onOpenOutput: (path?: string) => void;
   onOpenOutputFolder: (path?: string) => void;
   onRemoveItem: (id: string) => void;
+  onRetryItem: (id: string) => void;
 }
 
 const statusLabels: Record<QueueStatus, string> = {
@@ -38,6 +39,7 @@ export function QueueTable({
   onOpenOutput,
   onOpenOutputFolder,
   onRemoveItem,
+  onRetryItem,
 }: QueueTableProps) {
   if (items.length === 0) {
     return (
@@ -154,6 +156,16 @@ export function QueueTable({
                 >
                   <FolderOpen size={16} />
                 </button>
+                {item.status === "failed" ? (
+                  <button
+                    className="icon-button h-9 w-9 p-0"
+                    type="button"
+                    title="重试"
+                    onClick={() => onRetryItem(item.id)}
+                  >
+                    <RotateCcw size={16} />
+                  </button>
+                ) : null}
                 <button
                   className="icon-button danger-button h-9 w-9 p-0"
                   type="button"
