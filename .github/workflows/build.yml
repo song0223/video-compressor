@@ -88,13 +88,31 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          mapfile -d '' assets < <(find release-assets -type f \( -name "*.dmg" -o -name "*.exe" \) -print0)
+          version="${TAG_NAME#v}"
+          mkdir -p release-files
+
+          mapfile -d '' built_assets < <(find release-assets -type f \( -name "*.dmg" -o -name "*.exe" \) -print0)
+          for asset in "${built_assets[@]}"; do
+            case "$asset" in
+              *.dmg)
+                cp "$asset" "release-files/compression-toolbox_${version}_aarch64.dmg"
+                ;;
+              *setup.exe)
+                cp "$asset" "release-files/compression-toolbox_${version}_x64-setup.exe"
+                ;;
+              *.exe)
+                cp "$asset" "release-files/compression-toolbox_${version}_x64.exe"
+                ;;
+            esac
+          done
+
+          mapfile -d '' assets < <(find release-files -type f -print0)
           if [ "${#assets[@]}" -eq 0 ]; then
             echo "No release assets found"
             exit 1
           fi
 
-          title="压缩工具箱 ${TAG_NAME#v}"
+          title="压缩工具箱 $version"
           if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG_NAME" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
           else
