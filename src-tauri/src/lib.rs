@@ -1,4 +1,5 @@
 pub mod ffmpeg;
+pub mod images;
 pub mod jobs;
 pub mod models;
 pub mod presets;
@@ -18,6 +19,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             ffmpeg::get_video_metadata,
+            images::get_image_metadata,
+            images::export_image,
             jobs::export_video,
             jobs::cancel_current_export
         ])

@@ -71,11 +71,14 @@ function removeStaleBundledCopies(rootDir, names) {
   const targetRoot = join(rootDir, "src-tauri", "target");
   if (!existsSync(targetRoot)) return;
 
+  const appBundleNames = ["Video Compressor.app", "压缩工具箱.app"];
   for (const name of names) {
     for (const platform of ["macos", "windows"]) {
-      rmSync(join(targetRoot, "release", "bundle", "macos", "Video Compressor.app", "Contents", "Resources", "binaries", platform, name), {
-        force: true,
-      });
+      for (const appBundleName of appBundleNames) {
+        rmSync(join(targetRoot, "release", "bundle", "macos", appBundleName, "Contents", "Resources", "binaries", platform, name), {
+          force: true,
+        });
+      }
     }
   }
 }

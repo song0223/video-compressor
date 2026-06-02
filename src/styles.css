@@ -21,7 +21,7 @@
 
 body {
   margin: 0;
-  min-width: 980px;
+  min-width: 0;
   min-height: 100vh;
   background:
     linear-gradient(135deg, rgba(41, 92, 219, 0.08), transparent 34%),
@@ -40,6 +40,7 @@ button:disabled {
 
 .icon-button {
   display: inline-flex;
+  flex-shrink: 0;
   min-height: 36px;
   align-items: center;
   justify-content: center;
@@ -50,6 +51,7 @@ button:disabled {
   color: #24324a;
   padding: 0 12px;
   font-weight: 650;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -78,6 +80,111 @@ button:disabled {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 18px 60px rgba(42, 56, 83, 0.11);
+}
+
+.app-shell-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 20px;
+}
+
+.app-sidebar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 255, 0.82)),
+    rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+}
+
+.mac-window-dots {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 14px;
+}
+
+.mac-window-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.mac-window-dot.close {
+  background: #ff5f57;
+}
+
+.mac-window-dot.minimize {
+  background: #febc2e;
+}
+
+.mac-window-dot.zoom {
+  background: #28c840;
+}
+
+.tool-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+}
+
+.sidebar-nav-button {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+  padding: 0 12px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-nav-button:hover {
+  background: #f4f7fb;
+  color: #172033;
+}
+
+.sidebar-nav-button.active {
+  border-color: #c9d6ef;
+  background: #edf4ff;
+  color: #2353c5;
+}
+
+@media (max-width: 1040px) {
+  .tool-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  main {
+    padding: 16px;
+  }
+
+  .app-shell-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    min-height: auto;
+  }
+
+  .app-sidebar > div:first-child {
+    padding-bottom: 14px;
+  }
+
+  .app-sidebar-nav {
+    flex-direction: row;
+  }
+
+  .sidebar-nav-button {
+    flex: 1;
+    justify-content: center;
+  }
 }
 
 .progress-track {

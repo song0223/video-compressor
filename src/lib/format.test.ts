@@ -6,6 +6,10 @@ describe("format helpers", () => {
     expect(formatBytes(633 * 1024 * 1024)).toBe("633 MB");
   });
 
+  it("formats sub-megabyte file sizes in KB instead of rounding to 0 MB", () => {
+    expect(formatBytes(300 * 1024)).toBe("300 KB");
+  });
+
   it("formats duration", () => {
     expect(formatDuration(125)).toBe("2:05");
   });

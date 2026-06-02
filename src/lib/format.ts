@@ -1,5 +1,8 @@
 export function formatBytes(bytes?: number): string {
   if (bytes === undefined || Number.isNaN(bytes)) return "-";
+  if (bytes < 1024) return `${Math.max(0, Math.round(bytes))} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
   const mb = bytes / 1024 / 1024;
   if (mb < 1024) return `${Math.round(mb)} MB`;
   return `${(mb / 1024).toFixed(1)} GB`;

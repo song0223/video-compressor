@@ -17,7 +17,7 @@ export function Toolbar({
     <header className="tool-card flex items-center justify-between px-5 py-4">
       <div>
         <h1 className="m-0 text-[22px] font-bold tracking-normal text-slate-950">
-          Video Compressor
+          视频压缩
         </h1>
         <p className="m-0 mt-1 text-sm text-slate-500">
           {itemCount} 个视频 · MP4 / H.264 · {outputDirectory || "未选择输出位置"}
