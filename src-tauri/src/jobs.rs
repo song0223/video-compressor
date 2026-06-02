@@ -244,10 +244,10 @@ pub fn pause_current_export(state: State<'_, JobState>) -> Result<(), String> {
     state.mark_paused();
     if let Some(pid) = state.current_pid() {
         #[cfg(not(windows))]
-        let result = Command::new("kill").arg("-STOP").arg(pid.to_string()).status();
-        #[cfg(windows)]
-        let result = Ok(());
-        result.map_err(|error| format!("暂停导出失败: {error}"))?;
+        {
+            Command::new("kill").arg("-STOP").arg(pid.to_string()).status()
+                .map_err(|error| format!("暂停导出失败: {error}"))?;
+        }
     }
     Ok(())
 }
@@ -257,10 +257,10 @@ pub fn resume_current_export(state: State<'_, JobState>) -> Result<(), String> {
     state.mark_resumed();
     if let Some(pid) = state.current_pid() {
         #[cfg(not(windows))]
-        let result = Command::new("kill").arg("-CONT").arg(pid.to_string()).status();
-        #[cfg(windows)]
-        let result = Ok(());
-        result.map_err(|error| format!("恢复导出失败: {error}"))?;
+        {
+            Command::new("kill").arg("-CONT").arg(pid.to_string()).status()
+                .map_err(|error| format!("恢复导出失败: {error}"))?;
+        }
     }
     Ok(())
 }
