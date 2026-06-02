@@ -62,10 +62,9 @@ jobs:
       - name: Test Rust
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build app
-        run: npm run tauri build
+        run: npm run tauri -- build --bundles nsis
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: video-compressor-windows
+          name: compression-toolbox-windows
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
